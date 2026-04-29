@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Deploy Cost Calculator</title>
+  <meta name="description" content="Calculate VRAM requirements, GPU recommendations, and cost comparison between self-hosted LLMs and API providers.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23fabd2f'/%3E%3Ctext x='50' y='68' font-size='60' font-family='Inter, system-ui, sans-serif' font-weight='700' text-anchor='middle' fill='%231d2021'%3E$%3C/text%3E%3C/svg%3E">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Menlo', 'monospace'],
+          },
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #1d2021;
+      --bg-secondary: #282828;
+      --bg-tertiary: #3c3836;
+      --bg-card: #32302f;
+      --text-primary: #ebdbb2;
+      --text-secondary: #a89984;
+      --text-muted: #928374;
+      --border: #504945;
+      --accent-primary: #fabd2f;
+      --accent-success: #b8bb26;
+      --accent-danger: #fb4934;
+      --accent-info: #83a598;
+      --accent-purple: #d3869b;
+      --chart-self: #83a598;
+      --chart-api: #fb4934;
+    }
+    .light {
+      --bg-primary: #fbf1c7;
+      --bg-secondary: #f2e5bc;
+      --bg-tertiary: #ebdbb2;
+      --bg-card: #f9f5d7;
+      --text-primary: #3c3836;
+      --text-secondary: #504945;
+      --text-muted: #7c6f64;
+      --border: #d5c4a1;
+      --accent-primary: #b57614;
+      --accent-success: #79740e;
+      --accent-danger: #9d0006;
+      --accent-info: #076678;
+      --accent-purple: #8f3f71;
+      --chart-self: #076678;
+      --chart-api: #9d0006;
+    }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+    .gruv-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: all 0.2s ease;
+    }
+    .gruv-input {
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      width: 100%;
+      transition: all 0.2s ease;
+    }
+    .gruv-input:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 2px rgba(250, 189, 47, 0.15);
+    }
+    .gruv-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--bg-tertiary);
+      outline: none;
+    }
+    .gruv-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent-primary);
+      cursor: pointer;
+      border: 2px solid var(--bg-primary);
+      transition: transform 0.15s ease;
+    }
+    .gruv-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+    .gruv-slider::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent-primary);
+      cursor: pointer;
+      border: 2px solid var(--bg-primary);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .animate-value {
+      transition: all 0.3s ease;
+    }
+    .chart-tooltip {
+      position: absolute;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.75rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      z-index: 10;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .chart-tooltip.visible {
+      opacity: 1;
+    }
+    .bar-fill {
+      transition: width 0.5s ease;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useCallback } = React;
+
+    // ============================================
+    // DATA CONSTANTS
+    // ============================================
+
+    const QUANTIZATIONS = [
+      { key: 'fp16', label: 'FP16', bytes: 2 },
+      { key: 'q8', label: 'Q8', bytes: 1 },
+      { key: 'q4_k_m', label: 'Q4_K_M', bytes: 0.5 },
+      { key: 'awq4', label: 'AWQ 4-bit', bytes: 0.5 },
+      { key: 'gguf_q4', label: 'GGUF Q4', bytes: 0.5 },
+      { key: 'gguf_q5', label: 'GGUF Q5', bytes: 0.625 },
+    ];
+
+    const GPUS = [
+      { name: 'RTX 3090', vram: 24, hourly: 0.49 },
+      { name: 'RTX 4090', vram: 24, hourly: 0.59 },
+      { name: 'RTX 5090', vram: 32, hourly: 1.58 },
+      { name: 'L4', vram: 24, hourly: 0.49 },
+      { name: 'A10G', vram: 24, hourly: 1.10 },
+      { name: 'L40S', vram: 48, hourly: 1.34 },
+      { name: 'A100 40GB', vram: 40, hourly: 1.10 },
+      { name: 'A100 80GB', vram: 80, hourly: 2.31 },
+      { name: 'H100 80GB', vram: 80, hourly: 3.39 },
+      { name: 'H200 141GB', vram: 141, hourly: 4.31 },
+    ];
+
+    const MODELS = {
+      'qwen3': {
+        family: 'Qwen3 (Alibaba)',
+        variants: [
+          { name: 'Qwen3-0.6B', params: 0.6, layers: 24, hidden: 1024, heads: 16, kv_heads: 4, context: 32768, arch: 'gqa' },
+          { name: 'Qwen3-1.7B', params: 1.7, layers: 24, hidden: 1536, heads: 12, kv_heads: 4, context: 32768, arch: 'gqa' },
+          { name: 'Qwen3-4B', params: 4, layers: 36, hidden: 2560, heads: 20, kv_heads: 4, context: 32768, arch: 'gqa' },
+          { name: 'Qwen3-8B', params: 8, layers: 36, hidden: 4096, heads: 32, kv_heads: 8, context: 131072, arch: 'gqa' },
+          { name: 'Qwen3-14B', params: 14, layers: 40, hidden: 5120, heads: 40, kv_heads: 8, context: 131072, arch: 'gqa' },
+          { name: 'Qwen3-32B', params: 32, layers: 64, hidden: 5120, heads: 40, kv_heads: 8, context: 131072, arch: 'gqa' },
+          { name: 'Qwen3-235B (MoE)', params: 235, active_params: 32, layers: 64, hidden: 8192, heads: 64, kv_heads: 8, context: 131072, arch: 'moe', moe_topk: 8 },
+        ]
+      },
+      'gemma3': {
+        family: 'Gemma 3 (Google)',
+        variants: [
+          { name: 'Gemma 3-1B', params: 1, layers: 26, hidden: 1152, heads: 4, kv_heads: 1, context: 131072, arch: 'gqa' },
+          { name: 'Gemma 3-4B', params: 4, layers: 34, hidden: 2560, heads: 8, kv_heads: 4, context: 131072, arch: 'gqa' },
+          { name: 'Gemma 3-12B', params: 12, layers: 48, hidden: 3840, heads: 16, kv_heads: 16, context: 131072, arch: 'mha' },
+          { name: 'Gemma 3-27B', params: 27, layers: 48, hidden: 5376, heads: 16, kv_heads: 8, context: 131072, arch: 'gqa' },
+        ]
+      },
+      'gemma4': {
+        family: 'Gemma 4 (Google, est.)',
+        variants: [
+          { name: 'Gemma 4-9B', params: 9, layers: 48, hidden: 4096, heads: 32, kv_heads: 8, context: 131072, arch: 'gqa' },
+          { name: 'Gemma 4-27B', params: 27, layers: 64, hidden: 6144, heads: 32, kv_heads: 8, context: 131072, arch: 'gqa' },
+        ]
+      },
+      'phi4': {
+        family: 'Phi-4 (Microsoft)',
+        variants: [
+          { name: 'Phi-4-mini', params: 3.8, layers: 32, hidden: 3072, heads: 32, kv_heads: 8, context: 131072, arch: 'gqa' },
+          { name: 'Phi-4', params: 14, layers: 40, hidden: 5120, heads: 40, kv_heads: 10, context: 16384, arch: 'gqa' },
+        ]
+      },
+      'mistral': {
+        family: 'Mistral',
+        variants: [
+          { name: 'Mistral Small 3.2', params: 24, layers: 40, hidden: 5120, heads: 32, kv_heads: 8, context: 128000, arch: 'gqa' },
+          { name: 'Mistral Large 3', params: 123, layers: 88, hidden: 12288, heads: 96, kv_heads: 8, context: 262144, arch: 'gqa' },
+        ]
+      },
+      'deepseek': {
+        family: 'DeepSeek',
+        variants: [
+          { name: 'DeepSeek V4 Flash', params: 284, active_params: 13, layers: 61, hidden: 7168, heads: 128, kv_heads: 128, context: 1048576, arch: 'mla', kv_dim: 512 },
+          { name: 'DeepSeek V4 Pro', params: 284, active_params: 49, layers: 61, hidden: 7168, heads: 128, kv_heads: 128, context: 1048576, arch: 'mla', kv_dim: 512 },
+          { name: 'DeepSeek R1', params: 671, active_params: 37, layers: 61, hidden: 7168, heads: 128, kv_heads: 128, context: 163840, arch: 'mla', kv_dim: 512 },
+          { name: 'DeepSeek R1 Distill-Qwen 32B', params: 32, layers: 64, hidden: 5120, heads: 40, kv_heads: 8, context: 32768, arch: 'gqa' },
+          { name: 'DeepSeek R1 Distill-Llama 70B', params: 70, layers: 80, hidden: 8192, heads: 64, kv_heads: 8, context: 131072, arch: 'gqa' },
+        ]
+      },
+      'gpt4o': {
+        family: 'OpenAI GPT-4o',
+        variants: [
+          { name: 'GPT-4o-mini', params: 8, layers: 36, hidden: 4096, heads: 32, kv_heads: 8, context: 128000, arch: 'gqa' },
+          { name: 'GPT-4o', params: 200, layers: 80, hidden: 12288, heads: 96, kv_heads: 8, context: 128000, arch: 'gqa' },
+          { name: 'GPT-4.5 (preview)', params: 400, layers: 120, hidden: 16384, heads: 128, kv_heads: 8, context: 128000, arch: 'gqa' },
+        ]
+      },
+      'claude': {
+        family: 'Anthropic Claude',
+        variants: [
+          { name: 'Claude Haiku 4', params: 20, layers: 44, hidden: 4096, heads: 32, kv_heads: 8, context: 1000000, arch: 'gqa' },
+          { name: 'Claude Sonnet 4.6', params: 175, layers: 80, hidden: 12288, heads: 96, kv_heads: 8, context: 1000000, arch: 'gqa' },
+          { name: 'Claude Opus 4.7', params: 400, layers: 120, hidden: 16384, heads: 128, kv_heads: 8, context: 1000000, arch: 'gqa' },
+        ]
+      },
+      'gemini': {
+        family: 'Google Gemini',
+        variants: [
+          { name: 'Gemini 2.5 Flash', params: 40, layers: 50, hidden: 8192, heads: 64, kv_heads: 8, context: 1048576, arch: 'gqa' },
+          { name: 'Gemini 2.5 Pro', params: 100, layers: 64, hidden: 12288, heads: 96, kv_heads: 8, context: 1048576, arch: 'gqa' },
+          { name: 'Gemini 3 (est.)', params: 150, layers: 72, hidden: 14336, heads: 112, kv_heads: 8, context: 1048576, arch: 'gqa' },
+        ]
+      },
+      'grok': {
+        family: 'xAI Grok',
+        variants: [
+          { name: 'Grok-3 Mini', params: 50, layers: 56, hidden: 8192, heads: 64, kv_heads: 8, context: 131072, arch: 'gqa' },
+          { name: 'Grok-3', params: 314, layers: 96, hidden: 12288, heads: 96, kv_heads: 8, context: 131072, arch: 'gqa' },
+        ]
+      },
+      'kimi': {
+        family: 'Moonshot Kimi',
+        variants: [
+          { name: 'Kimi k1.5', params: 100, layers: 80, hidden: 8192, heads: 64, kv_heads: 8, context: 256000, arch: 'gqa' },
+        ]
+      },
+      'glm': {
+        family: 'Zhipu GLM',
+        variants: [
+          { name: 'GLM-4-9B', params: 9, layers: 40, hidden: 4096, heads: 32, kv_heads: 2, context: 131072, arch: 'gqa' },
+          { name: 'GLM-4-32B', params: 32, layers: 64, hidden: 5120, heads: 40, kv_heads: 8, context: 131072, arch: 'gqa' },
+        ]
+      },
+      'custom': {
+        family: 'Custom Model',
+        variants: [
+          { name: 'Custom Dense (GQA)', params: 7, layers: 32, hidden: 4096, heads: 32, kv_heads: 8, context: 32768, arch: 'gqa' },
+        ]
+      }
+    };
+
+    const API_PRICING = [
+      { model: 'GPT-4o', provider: 'OpenAI', input: 2.50, output: 10.00 },
+      { model: 'GPT-4o-mini', provider: 'OpenAI', input: 0.15, output: 0.60 },
+      { model: 'GPT-4.5 (preview)', provider: 'OpenAI', input: 75.00, output: 150.00 },
+      { model: 'Claude Sonnet 4.6', provider: 'Anthropic', input: 3.00, output: 15.00 },
+      { model: 'Claude Opus 4.7', provider: 'Anthropic', input: 5.00, output: 25.00 },
+      { model: 'Claude Haiku 4', provider: 'Anthropic', input: 0.25, output: 1.25 },
+      { model: 'Gemini 2.5 Flash', provider: 'Google', input: 0.30, output: 2.50 },
+      { model: 'Gemini 2.5 Pro', provider: 'Google', input: 1.25, output: 10.00 },
+      { model: 'Gemini 3 (est.)', provider: 'Google', input: 2.00, output: 8.00 },
+      { model: 'Grok-3', provider: 'xAI', input: 3.00, output: 15.00 },
+      { model: 'Grok-3 Mini', provider: 'xAI', input: 0.60, output: 3.00 },
+      { model: 'Kimi k1.5', provider: 'Moonshot', input: 0.50, output: 2.00 },
+      { model: 'GLM-4-9B', provider: 'Zhipu', input: 0.10, output: 0.50 },
+      { model: 'GLM-4-32B', provider: 'Zhipu', input: 0.30, output: 1.20 },
+      { model: 'Qwen3-235B', provider: 'Alibaba', input: 0.50, output: 1.00 },
+      { model: 'Qwen3-32B', provider: 'Alibaba', input: 0.15, output: 0.40 },
+      { model: 'Qwen3-14B', provider: 'Alibaba', input: 0.08, output: 0.20 },
+      { model: 'Qwen3-8B', provider: 'Alibaba', input: 0.04, output: 0.10 },
+      { model: 'DeepSeek V4 Pro', provider: 'DeepSeek', input: 0.44, output: 0.87 },
+      { model: 'DeepSeek V4 Flash', provider: 'DeepSeek', input: 0.14, output: 0.28 },
+      { model: 'DeepSeek R1', provider: 'DeepSeek', input: 0.50, output: 2.15 },
+      { model: 'DeepSeek R1 Distill-Qwen 32B', provider: 'DeepSeek', input: 0.29, output: 0.29 },
+      { model: 'DeepSeek R1 Distill-Llama 70B', provider: 'DeepSeek', input: 0.70, output: 0.80 },
+      { model: 'Gemma 3-27B', provider: 'Google', input: 0.08, output: 0.16 },
+      { model: 'Gemma 3-12B', provider: 'Google', input: 0.04, output: 0.13 },
+      { model: 'Mistral Large 3', provider: 'Mistral', input: 0.50, output: 1.50 },
+      { model: 'Mistral Small 3.2', provider: 'Mistral', input: 0.075, output: 0.20 },
+    ];
+
+    const PRESETS = [
+      {
+        name: 'Customer Support Bot',
+        family: 'qwen3',
+        variant: 'Qwen3-14B',
+        quantization: 'q4_k_m',
+        contextLength: 8192,
+        concurrent: 8,
+        dailyVolume: 500,
+        avgTokens: 1500,
+        inputRatio: 70,
+      },
+      {
+        name: 'Code Assistant',
+        family: 'qwen3',
+        variant: 'Qwen3-32B',
+        quantization: 'q4_k_m',
+        contextLength: 32768,
+        concurrent: 4,
+        dailyVolume: 200,
+        avgTokens: 4000,
+        inputRatio: 40,
+      },
+      {
+        name: 'Enterprise RAG',
+        family: 'deepseek',
+        variant: 'DeepSeek V4 Pro',
+        quantization: 'q4_k_m',
+        contextLength: 65536,
+        concurrent: 16,
+        dailyVolume: 1000,
+        avgTokens: 3000,
+        inputRatio: 80,
+      },
+      {
+        name: 'Startup MVP',
+        family: 'gemma3',
+        variant: 'Gemma 3-27B',
+        quantization: 'q4_k_m',
+        contextLength: 16384,
+        concurrent: 2,
+        dailyVolume: 100,
+        avgTokens: 1000,
+        inputRatio: 60,
+      },
+      {
+        name: 'High-Volume API Replacement',
+        family: 'deepseek',
+        variant: 'DeepSeek V4 Flash',
+        quantization: 'q4_k_m',
+        contextLength: 8192,
+        concurrent: 32,
+        dailyVolume: 5000,
+        avgTokens: 800,
+        inputRatio: 50,
+      },
+    ];
+
+    // ============================================
+    // CALCULATION ENGINE
+    // ============================================
+
+    function calculateVRAM(model, quantization, contextLength, concurrentRequests) {
+      const q = QUANTIZATIONS.find(q => q.key === quantization) || QUANTIZATIONS[2];
+      const bytesPerParam = q.bytes;
+      
+      let activeParams = model.active_params || model.params;
+      let modelVRAM = activeParams * 1e9 * bytesPerParam;
+      
+      let kvPerToken;
+      if (model.arch === 'mla') {
+        // DeepSeek MLA: compressed latent representation
+        const kvDim = model.kv_dim || 512;
+        kvPerToken = 2 * model.layers * kvDim * bytesPerParam;
+      } else {
+        // Standard attention (MHA or GQA)
+        const headDim = model.hidden / model.heads;
+        const kvHeads = model.kv_heads || model.heads;
+        kvPerToken = 2 * model.layers * kvHeads * headDim * bytesPerParam;
+      }
+      
+      const totalKV = kvPerToken * contextLength * concurrentRequests;
+      const overhead = 1.15;
+      const totalVRAM = (modelVRAM + totalKV) * overhead;
+      
+      return {
+        modelVRAM,
+        kvCache: totalKV,
+        overheadAmount: (modelVRAM + totalKV) * 0.15,
+        totalVRAM,
+        breakdown: {
+          weights: modelVRAM,
+          kv: totalKV,
+          overhead: (modelVRAM + totalKV) * 0.15,
+        }
+      };
+    }
+
+    function recommendGPU(totalVRAM) {
+      const suitable = GPUS.filter(g => g.vram >= totalVRAM / 1e9);
+      
+      if (suitable.length > 0) {
+        // Pick cheapest suitable GPU
+        const best = suitable.reduce((min, g) => g.hourly < min.hourly ? g : min, suitable[0]);
+        return { gpu: best, count: 1, multi: false };
+      }
+      
+      // Need multi-GPU
+      const sorted = [...GPUS].sort((a, b) => b.vram - a.vram);
+      for (const gpu of sorted) {
+        const count = Math.ceil((totalVRAM / 1e9) / gpu.vram);
+        if (count <= 8) {
+          return { gpu, count, multi: true };
+        }
+      }
+      
+      // Fallback to H200 x 8
+      return { gpu: GPUS[GPUS.length - 1], count: 8, multi: true };
+    }
+
+    function calculateCosts(dailyVolume, avgTokens, inputRatio, gpuRec, apiModelName) {
+      const monthlyDays = 30;
+      const monthlyCalls = dailyVolume * monthlyDays;
+      const totalTokensMonthly = monthlyCalls * avgTokens;
+      
+      // Self-hosted
+      const selfHostedMonthly = gpuRec.gpu.hourly * 730 * gpuRec.count;
+      
+      // API
+      const apiPricing = API_PRICING.find(p => p.model === apiModelName) || API_PRICING[0];
+      const inputTokens = totalTokensMonthly * (inputRatio / 100);
+      const outputTokens = totalTokensMonthly * ((100 - inputRatio) / 100);
+      const apiMonthly = (inputTokens / 1e6 * apiPricing.input) + (outputTokens / 1e6 * apiPricing.output);
+      
+      // Per transcript
+      const selfHostedPerTranscript = selfHostedMonthly / monthlyCalls;
+      const apiPerTranscript = apiMonthly / monthlyCalls;
+      
+      return {
+        selfHostedMonthly,
+        apiMonthly,
+        selfHostedPerTranscript,
+        apiPerTranscript,
+        winner: selfHostedMonthly < apiMonthly ? 'self' : 'api',
+        savings: Math.abs(selfHostedMonthly - apiMonthly),
+        savingsPercent: Math.abs(selfHostedMonthly - apiMonthly) / Math.max(selfHostedMonthly, apiMonthly) * 100,
+        apiPricing,
+      };
+    }
+
+    function generateBreakEvenData(dailyVolume, avgTokens, inputRatio, gpuRec, apiModelName) {
+      const apiPricing = API_PRICING.find(p => p.model === apiModelName) || API_PRICING[0];
+      const selfHostedMonthly = gpuRec.gpu.hourly * 730 * gpuRec.count;
+      
+      const volumes = [];
+      for (let i = 0; i <= 100; i++) {
+        const vol = Math.round(Math.exp(Math.log(1) + (Math.log(10000) - Math.log(1)) * (i / 100)));
+        if (volumes.length === 0 || volumes[volumes.length - 1] !== vol) {
+          volumes.push(vol);
+        }
+      }
+      
+      return volumes.map(vol => {
+        const monthlyCalls = vol * 30;
+        const totalTokens = monthlyCalls * avgTokens;
+        const inputTokens = totalTokens * (inputRatio / 100);
+        const outputTokens = totalTokens * ((100 - inputRatio) / 100);
+        const apiCost = (inputTokens / 1e6 * apiPricing.input) + (outputTokens / 1e6 * apiPricing.output);
+        
+        return {
+          volume: vol,
+          selfHosted: selfHostedMonthly,
+          api: apiCost,
+        };
+      });
+    }
+
+    function findBreakEven(data) {
+      for (let i = 1; i < data.length; i++) {
+        const prev = data[i - 1];
+        const curr = data[i];
+        if ((prev.selfHosted > prev.api && curr.selfHosted <= curr.api) ||
+            (prev.selfHosted < prev.api && curr.selfHosted >= curr.api)) {
+          // Linear interpolation
+          const ratio = (prev.api - prev.selfHosted) / ((curr.selfHosted - curr.api) - (prev.selfHosted - prev.api));
+          return Math.round(prev.volume + ratio * (curr.volume - prev.volume));
+        }
+      }
+      return null;
+    }
+
+    function estimateArchitecture(params) {
+      // params in billions
+      // Interpolate from known modern dense GQA architectures
+      let hidden, layers, heads, kvHeads;
+      
+      if (params <= 1) {
+        hidden = 1024; layers = 24; heads = 16; kvHeads = 4;
+      } else if (params <= 4) {
+        const t = (params - 1) / 3;
+        hidden = Math.round((1024 + t * 1536) / 128) * 128;
+        layers = Math.round(24 + t * 12);
+        heads = Math.round((16 + t * 4) / 8) * 8;
+        kvHeads = 4;
+      } else if (params <= 14) {
+        const t = (params - 4) / 10;
+        hidden = Math.round((2560 + t * 2560) / 128) * 128;
+        layers = Math.round(36 + t * 4);
+        heads = Math.round((20 + t * 20) / 8) * 8;
+        kvHeads = 8;
+      } else if (params <= 32) {
+        const t = (params - 14) / 18;
+        hidden = Math.round((5120 + t * 3072) / 128) * 128;
+        layers = Math.round(40 + t * 24);
+        heads = Math.round((40 + t * 24) / 8) * 8;
+        kvHeads = 8;
+      } else if (params <= 70) {
+        const t = (params - 32) / 38;
+        hidden = Math.round((8192 + t * 4096) / 128) * 128;
+        layers = Math.round(64 + t * 16);
+        heads = Math.round((64 + t * 32) / 8) * 8;
+        kvHeads = 8;
+      } else {
+        const t = Math.min(1, (params - 70) / 330);
+        hidden = Math.round((12288 + t * 4096) / 128) * 128;
+        layers = Math.round(80 + t * 40);
+        heads = Math.round((96 + t * 32) / 8) * 8;
+        kvHeads = 8;
+      }
+      
+      return { hidden, layers, heads, kvHeads };
+    }
+
+    // ============================================
+    // COMPONENTS
+    // ============================================
+
+    function ThemeToggle({ dark, setDark }) {
+      return (
+        <button
+          onClick={() => setDark(!dark)}
+          className="p-2 rounded-lg transition-colors hover:bg-opacity-10 hover:bg-gray-500"
+          style={{ color: 'var(--text-secondary)' }}
+          title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {dark ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          )}
+        </button>
+      );
+    }
+
+    function PresetSelector({ onSelect }) {
+      const [open, setOpen] = useState(false);
+      
+      return (
+        <div className="relative">
+          <button
+            onClick={() => setOpen(!open)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all"
+            style={{ 
+              backgroundColor: 'var(--accent-primary)', 
+              color: 'var(--bg-primary)',
+            }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            </svg>
+            Load Preset
+            <svg className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {open && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+              <div 
+                className="absolute top-full left-0 mt-2 w-64 rounded-lg shadow-xl z-20 overflow-hidden"
+                style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)' }}
+              >
+                {PRESETS.map(preset => (
+                  <button
+                    key={preset.name}
+                    onClick={() => { onSelect(preset); setOpen(false); }}
+                    className="w-full text-left px-4 py-3 text-sm transition-colors hover:bg-opacity-10 hover:bg-gray-500"
+                    style={{ color: 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
+                  >
+                    <div className="font-medium">{preset.name}</div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {preset.variant} · {preset.dailyVolume} calls/day
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    function Slider({ label, value, min, max, step, onChange, format, warning }) {
+      return (
+        <div className="mb-5">
+          <div className="flex justify-between items-center mb-2">
+            <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+              {label}
+            </label>
+            <span 
+              className="text-sm font-mono font-semibold animate-value"
+              style={{ color: 'var(--accent-primary)' }}
+            >
+              {format ? format(value) : value}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={e => onChange(Number(e.target.value))}
+            className="gruv-slider"
+          />
+          {warning && (
+            <div className="text-xs mt-1.5" style={{ color: 'var(--accent-danger)' }}>
+              {warning}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function BreakEvenChart({ data, breakEven }) {
+      const [hovered, setHovered] = useState(null);
+      const [tooltip, setTooltip] = useState({ x: 0, y: 0, visible: false, data: null });
+      
+      const width = 600;
+      const height = 280;
+      const padding = { top: 20, right: 20, bottom: 50, left: 60 };
+      const chartWidth = width - padding.left - padding.right;
+      const chartHeight = height - padding.top - padding.bottom;
+      
+      const maxCost = Math.max(
+        ...data.map(d => Math.max(d.selfHosted, d.api))
+      );
+      
+      const xScale = (vol) => {
+        const logMin = Math.log(1);
+        const logMax = Math.log(10000);
+        const logVol = Math.log(vol);
+        return padding.left + ((logVol - logMin) / (logMax - logMin)) * chartWidth;
+      };
+      
+      const yScale = (cost) => {
+        return padding.top + chartHeight - (cost / maxCost) * chartHeight;
+      };
+      
+      const selfHostedPath = data.map((d, i) => 
+        `${i === 0 ? 'M' : 'L'} ${xScale(d.volume)} ${yScale(d.selfHosted)}`
+      ).join(' ');
+      
+      const apiPath = data.map((d, i) => 
+        `${i === 0 ? 'M' : 'L'} ${xScale(d.volume)} ${yScale(d.api)}`
+      ).join(' ');
+      
+      const handleMouseMove = (e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        // Find closest data point
+        let closest = data[0];
+        let minDist = Infinity;
+        
+        for (const d of data) {
+          const dx = xScale(d.volume) - x;
+          const dist = Math.abs(dx);
+          if (dist < minDist) {
+            minDist = dist;
+            closest = d;
+          }
+        }
+        
+        if (minDist < 30) {
+          setTooltip({
+            x: xScale(closest.volume),
+            y: Math.min(yScale(closest.selfHosted), yScale(closest.api)) - 10,
+            visible: true,
+            data: closest,
+          });
+        } else {
+          setTooltip(prev => ({ ...prev, visible: false }));
+        }
+      };
+      
+      return (
+        <div className="relative">
+          <svg 
+            viewBox={`0 0 ${width} ${height}`} 
+            className="w-full"
+            style={{ maxHeight: '320px' }}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={() => setTooltip(prev => ({ ...prev, visible: false }))}
+          >
+            {/* Grid lines */}
+            {[0, 0.25, 0.5, 0.75, 1].map(tick => {
+              const y = padding.top + chartHeight * tick;
+              return (
+                <line key={tick} x1={padding.left} y1={y} x2={width - padding.right} y2={y} 
+                  stroke="var(--border)" strokeWidth={0.5} strokeDasharray="4 4" />
+              );
+            })}
+            
+            {/* Axes */}
+            <line x1={padding.left} y1={padding.top} x2={padding.left} y2={height - padding.bottom} 
+              stroke="var(--text-muted)" strokeWidth={1} />
+            <line x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} 
+              stroke="var(--text-muted)" strokeWidth={1} />
+            
+            {/* Y-axis labels */}
+            {[0, 0.25, 0.5, 0.75, 1].map(tick => {
+              const value = maxCost * (1 - tick);
+              const y = padding.top + chartHeight * tick;
+              return (
+                <text key={tick} x={padding.left - 8} y={y + 4} textAnchor="end" 
+                  fontSize="10" fill="var(--text-muted)">
+                  ${value < 1000 ? value.toFixed(0) : (value / 1000).toFixed(1) + 'k'}
+                </text>
+              );
+            })}
+            
+            {/* X-axis labels */}
+            {[1, 10, 100, 1000, 10000].map(vol => (
+              <text key={vol} x={xScale(vol)} y={height - padding.bottom + 18} textAnchor="middle" 
+                fontSize="10" fill="var(--text-muted)">
+                {vol >= 1000 ? (vol / 1000) + 'k' : vol}/day
+              </text>
+            ))}
+            
+            {/* Lines */}
+            <path d={selfHostedPath} fill="none" stroke="var(--chart-self)" strokeWidth={2.5} />
+            <path d={apiPath} fill="none" stroke="var(--chart-api)" strokeWidth={2.5} />
+            
+            {/* Break-even marker */}
+            {breakEven && (
+              <>
+                <line 
+                  x1={xScale(breakEven)} y1={padding.top} 
+                  x2={xScale(breakEven)} y2={height - padding.bottom}
+                  stroke="var(--accent-primary)" strokeWidth={1.5} strokeDasharray="6 4" 
+                />
+                <circle cx={xScale(breakEven)} cy={yScale(data.find(d => d.volume >= breakEven)?.selfHosted || 0)} 
+                  r={5} fill="var(--accent-primary)" stroke="var(--bg-primary)" strokeWidth={2} />
+                <text x={xScale(breakEven)} y={padding.top - 6} textAnchor="middle" 
+                  fontSize="11" fontWeight="600" fill="var(--accent-primary)">
+                  Break-even: {breakEven >= 1000 ? (breakEven / 1000).toFixed(1) + 'k' : breakEven}/day
+                </text>
+              </>
+            )}
+            
+            {/* Legend */}
+            <g transform={`translate(${width - padding.right - 140}, ${padding.top})`}>
+              <line x1={0} y1={0} x2={20} y2={0} stroke="var(--chart-self)" strokeWidth={2.5} />
+              <text x={26} y={4} fontSize="11" fill="var(--text-secondary)">Self-hosted</text>
+              <line x1={0} y1={18} x2={20} y2={18} stroke="var(--chart-api)" strokeWidth={2.5} />
+              <text x={26} y={22} fontSize="11" fill="var(--text-secondary)">API</text>
+            </g>
+          </svg>
+          
+          {/* Tooltip */}
+          <div 
+            className={`chart-tooltip ${tooltip.visible ? 'visible' : ''}`}
+            style={{
+              left: `${(tooltip.x / width) * 100}%`,
+              top: `${(tooltip.y / height) * 100}%`,
+              transform: 'translate(-50%, -100%)',
+            }}
+          >
+            {tooltip.data && (
+              <div>
+                <div className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+                  {tooltip.data.volume >= 1000 ? (tooltip.data.volume / 1000).toFixed(1) + 'k' : tooltip.data.volume} calls/day
+                </div>
+                <div style={{ color: 'var(--chart-self)' }}>
+                  Self-hosted: ${tooltip.data.selfHosted.toFixed(0)}/mo
+                </div>
+                <div style={{ color: 'var(--chart-api)' }}>
+                  API: ${tooltip.data.api.toFixed(0)}/mo
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [dark, setDark] = useState(() => {
+        try {
+          const saved = localStorage.getItem('theme');
+          return saved ? saved === 'dark' : true;
+        } catch { return true; }
+      });
+      
+      const [family, setFamily] = useState('qwen3');
+      const [variant, setVariant] = useState('Qwen3-14B');
+      const [quantization, setQuantization] = useState('q4_k_m');
+      const [contextLength, setContextLength] = useState(8192);
+      const [concurrent, setConcurrent] = useState(8);
+      const [dailyVolume, setDailyVolume] = useState(500);
+      const [avgTokens, setAvgTokens] = useState(1500);
+      const [inputRatio, setInputRatio] = useState(70);
+      const [customParams, setCustomParams] = useState(7);
+      const [apiModel, setApiModel] = useState('GPT-4o');
+      
+      useEffect(() => {
+        try {
+          localStorage.setItem('theme', dark ? 'dark' : 'light');
+        } catch {}
+        if (dark) {
+          document.documentElement.classList.remove('light');
+        } else {
+          document.documentElement.classList.add('light');
+        }
+      }, [dark]);
+      
+      const model = useMemo(() => {
+        const familyData = MODELS[family];
+        const base = familyData.variants.find(v => v.name === variant) || familyData.variants[0];
+        
+        if (family === 'custom') {
+          const arch = estimateArchitecture(customParams);
+          return {
+            ...base,
+            params: customParams,
+            ...arch,
+            context: 131072,
+          };
+        }
+        
+        return base;
+      }, [family, variant, customParams]);
+      
+      const vramData = useMemo(() => 
+        calculateVRAM(model, quantization, contextLength, concurrent),
+      [model, quantization, contextLength, concurrent]);
+      
+      const gpuRec = useMemo(() => 
+        recommendGPU(vramData.totalVRAM),
+      [vramData]);
+      
+      const costs = useMemo(() => 
+        calculateCosts(dailyVolume, avgTokens, inputRatio, gpuRec, apiModel),
+      [dailyVolume, avgTokens, inputRatio, gpuRec, apiModel]);
+      
+      const breakEvenData = useMemo(() => 
+        generateBreakEvenData(dailyVolume, avgTokens, inputRatio, gpuRec, apiModel),
+      [dailyVolume, avgTokens, inputRatio, gpuRec, apiModel]);
+      
+      const breakEven = useMemo(() => findBreakEven(breakEvenData), [breakEvenData]);
+      
+      const handlePreset = (preset) => {
+        setFamily(preset.family);
+        setVariant(preset.variant);
+        setQuantization(preset.quantization);
+        setContextLength(preset.contextLength);
+        setConcurrent(preset.concurrent);
+        setDailyVolume(preset.dailyVolume);
+        setAvgTokens(preset.avgTokens);
+        setInputRatio(preset.inputRatio);
+      };
+      
+      const contextWarning = contextLength > model.context 
+        ? `Exceeds model's trained context (${model.context.toLocaleString()})`
+        : null;
+      
+      const formatBytes = (bytes) => {
+        const gb = bytes / 1e9;
+        if (gb >= 1000) return `${(gb / 1024).toFixed(2)} TB`;
+        return `${gb.toFixed(2)} GB`;
+      };
+      
+      const formatTokens = (n) => {
+        if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+        if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+        return n.toString();
+      };
+
+      return (
+        <div className="min-h-screen pb-12" style={{ backgroundColor: 'var(--bg-primary)' }}>
+          {/* Header */}
+          <header className="border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-secondary)' }}>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-lg"
+                  style={{ backgroundColor: 'var(--accent-primary)', color: 'var(--bg-primary)' }}
+                >
+                  $
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
+                    LLM Deploy Cost Calculator
+                  </h1>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    VRAM · GPU · Self-hosted vs API
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <PresetSelector onSelect={handlePreset} />
+                <ThemeToggle dark={dark} setDark={setDark} />
+              </div>
+            </div>
+          </header>
+          
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Panel - Inputs */}
+              <div className="lg:col-span-5 space-y-5">
+                <div className="gruv-card p-5">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" 
+                    style={{ color: 'var(--text-muted)' }}>
+                    Model Configuration
+                  </h2>
+                  
+                  {/* Model Family */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                      Model Family
+                    </label>
+                    <select
+                      value={family}
+                      onChange={e => {
+                        setFamily(e.target.value);
+                        setVariant(MODELS[e.target.value].variants[0].name);
+                      }}
+                      className="gruv-input"
+                    >
+                      {Object.entries(MODELS).map(([key, data]) => (
+                        <option key={key} value={key}>{data.family}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {/* Variant */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                      Variant
+                    </label>
+                    <select
+                      value={variant}
+                      onChange={e => setVariant(e.target.value)}
+                      className="gruv-input"
+                    >
+                      {MODELS[family].variants.map(v => (
+                        <option key={v.name} value={v.name}>
+                          {v.name} {v.params >= 1 ? `(${v.params}B)` : `(${v.params}B)`} {v.arch === 'moe' || v.arch === 'mla' ? `· ${v.arch.toUpperCase()}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {/* Custom Parameters */}
+                  {family === 'custom' && (
+                    <div className="mb-4">
+                      <div className="flex justify-between items-center mb-1.5">
+                        <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                          Parameter Count (Billions)
+                        </label>
+                        <span className="text-sm font-mono font-semibold" style={{ color: 'var(--accent-primary)' }}>
+                          {customParams}B
+                        </span>
+                      </div>
+                      <input
+                        type="number"
+                        min={0.5}
+                        max={500}
+                        step={0.5}
+                        value={customParams}
+                        onChange={e => setCustomParams(Math.max(0.5, Math.min(500, Number(e.target.value))))}
+                        className="gruv-input"
+                      />
+                      <div className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                        Architecture estimated: {model.layers} layers, {model.hidden} hidden, {model.kv_heads || model.heads} KV heads
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Quantization */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                      Quantization
+                    </label>
+                    <select
+                      value={quantization}
+                      onChange={e => setQuantization(e.target.value)}
+                      className="gruv-input"
+                    >
+                      {QUANTIZATIONS.map(q => (
+                        <option key={q.key} value={q.key}>
+                          {q.label} ({q.bytes} bytes/param)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <Slider
+                    label="Context Length"
+                    value={contextLength}
+                    min={2048}
+                    max={1048576}
+                    step={2048}
+                    onChange={setContextLength}
+                    format={v => formatTokens(v)}
+                    warning={contextWarning}
+                  />
+                  
+                  <Slider
+                    label="Concurrent Requests"
+                    value={concurrent}
+                    min={1}
+                    max={64}
+                    step={1}
+                    onChange={setConcurrent}
+                    format={v => `${v} req`}
+                  />
+                </div>
+                
+                <div className="gruv-card p-5">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" 
+                    style={{ color: 'var(--text-muted)' }}>
+                    Usage Profile
+                  </h2>
+                  
+                  <div className="mb-4">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        Daily Call Volume
+                      </label>
+                      <span className="text-sm font-mono font-semibold" style={{ color: 'var(--accent-primary)' }}>
+                        {dailyVolume.toLocaleString()}
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100000}
+                      value={dailyVolume}
+                      onChange={e => setDailyVolume(Math.max(1, Number(e.target.value)))}
+                      className="gruv-input"
+                    />
+                  </div>
+                  
+                  <div className="mb-4">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        Avg Tokens per Call
+                      </label>
+                      <span className="text-sm font-mono font-semibold" style={{ color: 'var(--accent-primary)' }}>
+                        {formatTokens(avgTokens)}
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      min={1}
+                      max={128000}
+                      value={avgTokens}
+                      onChange={e => setAvgTokens(Math.max(1, Number(e.target.value)))}
+                      className="gruv-input"
+                    />
+                  </div>
+                  
+                  <Slider
+                    label="Input / Output Ratio"
+                    value={inputRatio}
+                    min={10}
+                    max={90}
+                    step={5}
+                    onChange={setInputRatio}
+                    format={v => `${v}% / ${100 - v}%`}
+                  />
+                  
+                  <div className="mt-2">
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                      API Comparison Model
+                    </label>
+                    <select
+                      value={apiModel}
+                      onChange={e => setApiModel(e.target.value)}
+                      className="gruv-input"
+                    >
+                      {API_PRICING.map(p => (
+                        <option key={p.model} value={p.model}>
+                          {p.model} — ${p.input}/${p.output} per 1M ({p.provider})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Right Panel - Outputs */}
+              <div className="lg:col-span-7 space-y-5">
+                {/* VRAM Breakdown */}
+                <div className="gruv-card p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-semibold uppercase tracking-wider" 
+                      style={{ color: 'var(--text-muted)' }}>
+                      Required VRAM
+                    </h2>
+                    <span 
+                      className="text-2xl font-bold font-mono"
+                      style={{ color: 'var(--accent-primary)' }}
+                    >
+                      {formatBytes(vramData.totalVRAM)}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {[
+                      { label: 'Model Weights', value: vramData.breakdown.weights, color: 'var(--accent-info)' },
+                      { label: 'KV Cache', value: vramData.breakdown.kv, color: 'var(--accent-purple)' },
+                      { label: 'Overhead (15%)', value: vramData.breakdown.overhead, color: 'var(--accent-success)' },
+                    ].map(item => {
+                      const pct = (item.value / vramData.totalVRAM * 100).toFixed(1);
+                      return (
+                        <div key={item.label}>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span style={{ color: 'var(--text-secondary)' }}>{item.label}</span>
+                            <span className="font-mono" style={{ color: item.color }}>
+                              {formatBytes(item.value)} ({pct}%)
+                            </span>
+                          </div>
+                          <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                            <div 
+                              className="h-full rounded-full bar-fill"
+                              style={{ width: `${pct}%`, backgroundColor: item.color }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  <div className="mt-4 pt-4 text-xs" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
+                    Architecture: {model.arch.toUpperCase()} · 
+                    {model.arch === 'mla' ? ` MLA compressed KV` : 
+                      model.arch === 'moe' ? ` MoE (top-${model.moe_topk})` :
+                      ` ${model.layers} layers, ${model.hidden} hidden, ${model.kv_heads || model.heads} KV heads`}
+                  </div>
+                </div>
+                
+                {/* GPU Recommendation */}
+                <div className="gruv-card p-5">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" 
+                    style={{ color: 'var(--text-muted)' }}>
+                    Recommended Infrastructure
+                  </h2>
+                  
+                  <div className="flex items-center gap-4 mb-4">
+                    <div 
+                      className="w-16 h-16 rounded-xl flex items-center justify-center text-2xl font-bold"
+                      style={{ backgroundColor: 'var(--accent-primary)', color: 'var(--bg-primary)' }}
+                    >
+                      {gpuRec.gpu.name.split(' ')[0]}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
+                          {gpuRec.gpu.name}
+                        </span>
+                        {gpuRec.multi && (
+                          <span 
+                            className="badge"
+                            style={{ backgroundColor: 'var(--accent-danger)', color: 'white' }}
+                          >
+                            {gpuRec.count}× Multi-GPU
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                        {gpuRec.gpu.vram} GB VRAM · ${gpuRec.gpu.hourly}/hr · 
+                        Total: {gpuRec.gpu.vram * gpuRec.count} GB
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold font-mono" style={{ color: 'var(--accent-primary)' }}>
+                        ${(gpuRec.gpu.hourly * 730 * gpuRec.count).toFixed(0)}
+                      </div>
+                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>/month</div>
+                    </div>
+                  </div>
+                  
+                  {gpuRec.multi && (
+                    <div className="text-xs p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--accent-danger)' }}>
+                      ⚠ Model requires more VRAM than any single GPU. Multi-GPU inference adds complexity (tensor parallelism, communication overhead).
+                    </div>
+                  )}
+                </div>
+                
+                {/* Cost Comparison */}
+                <div className="gruv-card p-5">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" 
+                    style={{ color: 'var(--text-muted)' }}>
+                    Monthly Cost Comparison
+                  </h2>
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                      <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--chart-self)' }}>
+                        Self-hosted
+                      </div>
+                      <div className="text-3xl font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
+                        ${costs.selfHostedMonthly.toFixed(0)}
+                      </div>
+                      <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                        ${costs.selfHostedPerTranscript.toFixed(4)}/transcript
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                      <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--chart-api)' }}>
+                        API ({costs.apiPricing.provider})
+                      </div>
+                      <div className="text-3xl font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
+                        ${costs.apiMonthly.toFixed(0)}
+                      </div>
+                      <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                        ${costs.apiPerTranscript.toFixed(4)}/transcript
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg" 
+                    style={{ backgroundColor: costs.winner === 'self' ? 'rgba(184, 187, 38, 0.1)' : 'rgba(251, 73, 52, 0.1)' }}>
+                    <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      {costs.winner === 'self' ? 'Self-hosted wins by' : 'API wins by'}
+                    </span>
+                    <span className="text-lg font-bold font-mono" 
+                      style={{ color: costs.winner === 'self' ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                      ${costs.savings.toFixed(0)}/mo ({costs.savingsPercent.toFixed(1)}%)
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Break-even Chart */}
+                <div className="gruv-card p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-semibold uppercase tracking-wider" 
+                      style={{ color: 'var(--text-muted)' }}>
+                      Break-even Analysis
+                    </h2>
+                    {breakEven && (
+                      <span className="text-xs font-medium px-2 py-1 rounded-md" 
+                        style={{ backgroundColor: 'var(--accent-primary)', color: 'var(--bg-primary)' }}>
+                        Break-even at {breakEven >= 1000 ? (breakEven / 1000).toFixed(1) + 'k' : breakEven}/day
+                      </span>
+                    )}
+                  </div>
+                  
+                  <BreakEvenChart data={breakEvenData} breakEven={breakEven} />
+                  
+                  <div className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Self-hosted cost is flat (always-on GPU). API cost scales linearly with volume. 
+                    The intersection shows the daily volume where renting a GPU becomes cheaper than API calls.
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <footer className="mt-12 pt-6 text-center text-xs" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
+              <p>
+                Architecture data based on published technical reports. GPU pricing approximate (RunPod/Lambda). 
+                API pricing from OpenRouter as of April 2025. Closed-source model architectures are estimates.
+              </p>
+              <p className="mt-1">
+                Built for CTOs evaluating AI infrastructure decisions.
+              </p>
+            </footer>
+          </main>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
