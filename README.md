@@ -104,3 +104,9 @@ MIT
 ---
 
 Built for CTOs evaluating AI infrastructure decisions. If you have questions beyond what the calculator answers — model update strategy, operational maintenance, team hiring — those are consulting conversations, not calculator inputs.
+
+---
+
+## See also
+
+- [Blog post: What your buyer's CTO asks before approving on-prem LLM deployment](https://rituraj.info/posts/on-prem-llm-deployment-cto/) — Covers all five CTO questions: GPU sizing, monthly cost, break-even, model update strategy, and operational maintenance.
