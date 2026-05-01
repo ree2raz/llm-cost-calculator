@@ -290,30 +290,31 @@
     const API_PRICING = [
       { model: 'GPT-4o', provider: 'OpenAI', input: 2.50, output: 10.00 },
       { model: 'GPT-4o-mini', provider: 'OpenAI', input: 0.15, output: 0.60 },
-      { model: 'GPT-4.5 (preview)', provider: 'OpenAI', input: 75.00, output: 150.00 },
       { model: 'Claude Sonnet 4.6', provider: 'Anthropic', input: 3.00, output: 15.00 },
       { model: 'Claude Opus 4.7', provider: 'Anthropic', input: 5.00, output: 25.00 },
-      { model: 'Claude Haiku 4', provider: 'Anthropic', input: 0.25, output: 1.25 },
+      { model: 'Claude Haiku 4', provider: 'Anthropic', input: 1.00, output: 5.00 },
       { model: 'Gemini 2.5 Flash', provider: 'Google', input: 0.30, output: 2.50 },
       { model: 'Gemini 2.5 Pro', provider: 'Google', input: 1.25, output: 10.00 },
       { model: 'Gemini 3 (est.)', provider: 'Google', input: 2.00, output: 8.00 },
+      { model: 'Gemini 3 Flash (preview)', provider: 'Google', input: 0.50, output: 3.00 },
       { model: 'Grok-3', provider: 'xAI', input: 3.00, output: 15.00 },
-      { model: 'Grok-3 Mini', provider: 'xAI', input: 0.60, output: 3.00 },
-      { model: 'Kimi k1.5', provider: 'Moonshot', input: 0.50, output: 2.00 },
+      { model: 'Grok-3 Mini', provider: 'xAI', input: 0.30, output: 0.50 },
+      { model: 'Kimi k1.5', provider: 'Moonshot', input: 0.74, output: 3.49 },
       { model: 'GLM-4-9B', provider: 'Zhipu', input: 0.10, output: 0.50 },
-      { model: 'GLM-4-32B', provider: 'Zhipu', input: 0.30, output: 1.20 },
-      { model: 'Qwen3-235B', provider: 'Alibaba', input: 0.50, output: 1.00 },
-      { model: 'Qwen3-32B', provider: 'Alibaba', input: 0.15, output: 0.40 },
-      { model: 'Qwen3-14B', provider: 'Alibaba', input: 0.08, output: 0.20 },
-      { model: 'Qwen3-8B', provider: 'Alibaba', input: 0.04, output: 0.10 },
+      { model: 'GLM-4-32B', provider: 'Zhipu', input: 0.10, output: 0.10 },
+      { model: 'Qwen3-235B', provider: 'Alibaba', input: 0.071, output: 0.10 },
+      { model: 'Qwen3-32B', provider: 'Alibaba', input: 0.08, output: 0.24 },
+      { model: 'Qwen3-14B', provider: 'Alibaba', input: 0.06, output: 0.24 },
+      { model: 'Qwen3-8B', provider: 'Alibaba', input: 0.05, output: 0.40 },
       { model: 'DeepSeek V4 Pro', provider: 'DeepSeek', input: 0.44, output: 0.87 },
       { model: 'DeepSeek V4 Flash', provider: 'DeepSeek', input: 0.14, output: 0.28 },
-      { model: 'DeepSeek R1', provider: 'DeepSeek', input: 0.50, output: 2.15 },
+      { model: 'DeepSeek R1', provider: 'DeepSeek', input: 0.70, output: 2.50 },
       { model: 'DeepSeek R1 Distill-Qwen 32B', provider: 'DeepSeek', input: 0.29, output: 0.29 },
       { model: 'DeepSeek R1 Distill-Llama 70B', provider: 'DeepSeek', input: 0.70, output: 0.80 },
       { model: 'Gemma 3-27B', provider: 'Google', input: 0.08, output: 0.16 },
       { model: 'Gemma 3-12B', provider: 'Google', input: 0.04, output: 0.13 },
-      { model: 'Mistral Large 3', provider: 'Mistral', input: 0.50, output: 1.50 },
+      { model: 'Gemma 3-4B', provider: 'Google', input: 0.04, output: 0.08 },
+      { model: 'Mistral Large 3', provider: 'Mistral', input: 2.00, output: 6.00 },
       { model: 'Mistral Small 3.2', provider: 'Mistral', input: 0.075, output: 0.20 },
     ];
 
@@ -1299,7 +1300,7 @@
             <footer className="mt-12 pt-6 text-center text-xs" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
               <p>
                 Architecture data based on published technical reports. GPU pricing approximate (RunPod/Lambda). 
-                API pricing from OpenRouter as of April 2025. Closed-source model architectures are estimates.
+                API pricing from OpenRouter as of April 2026. Closed-source model architectures are estimates.
               </p>
               <p className="mt-1">
                 Built for CTOs evaluating AI infrastructure decisions.

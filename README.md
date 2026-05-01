@@ -80,7 +80,7 @@ No `npm install`, no build step. The entire app is in `index.html`.
 
 ## Model Data Sources
 
-- **API pricing:** OpenRouter (April 2025)
+- **API pricing:** OpenRouter (April 2026)
 - **Architecture metadata:** Published technical reports (Qwen3, Gemma 3, DeepSeek V4, etc.)
 - **GPU pricing:** RunPod Community Cloud / Lambda Cloud (approximate, update monthly)
 - **Closed-source architectures:** Best-effort estimates based on parameter count and generation
