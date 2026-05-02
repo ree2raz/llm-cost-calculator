@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build && cp CNAME docs/",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy": "npm run build && git add docs/ && git commit -m deploy && git push"
   },
   "dependencies": {
     "react": "^18.3.1",
