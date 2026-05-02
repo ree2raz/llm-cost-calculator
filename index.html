@@ -288,35 +288,36 @@
     };
 
     const API_PRICING = [
-      { model: 'GPT-4o', provider: 'OpenAI', input: 2.50, output: 10.00 },
-      { model: 'GPT-4o-mini', provider: 'OpenAI', input: 0.15, output: 0.60 },
-      { model: 'Claude Sonnet 4.6', provider: 'Anthropic', input: 3.00, output: 15.00 },
-      { model: 'Claude Opus 4.7', provider: 'Anthropic', input: 5.00, output: 25.00 },
-      { model: 'Claude Haiku 4', provider: 'Anthropic', input: 1.00, output: 5.00 },
-      { model: 'Gemini 2.5 Flash', provider: 'Google', input: 0.30, output: 2.50 },
-      { model: 'Gemini 2.5 Pro', provider: 'Google', input: 1.25, output: 10.00 },
-      { model: 'Gemini 3 (est.)', provider: 'Google', input: 2.00, output: 8.00 },
-      { model: 'Gemini 3 Flash (preview)', provider: 'Google', input: 0.50, output: 3.00 },
-      { model: 'Grok-3', provider: 'xAI', input: 3.00, output: 15.00 },
-      { model: 'Grok-3 Mini', provider: 'xAI', input: 0.30, output: 0.50 },
-      { model: 'Kimi k1.5', provider: 'Moonshot', input: 0.74, output: 3.49 },
-      { model: 'GLM-4-9B', provider: 'Zhipu', input: 0.10, output: 0.50 },
-      { model: 'GLM-4-32B', provider: 'Zhipu', input: 0.10, output: 0.10 },
-      { model: 'Qwen3-235B', provider: 'Alibaba', input: 0.071, output: 0.10 },
-      { model: 'Qwen3-32B', provider: 'Alibaba', input: 0.08, output: 0.24 },
-      { model: 'Qwen3-14B', provider: 'Alibaba', input: 0.06, output: 0.24 },
-      { model: 'Qwen3-8B', provider: 'Alibaba', input: 0.05, output: 0.40 },
-      { model: 'DeepSeek V4 Pro', provider: 'DeepSeek', input: 0.44, output: 0.87 },
-      { model: 'DeepSeek V4 Flash', provider: 'DeepSeek', input: 0.14, output: 0.28 },
-      { model: 'DeepSeek R1', provider: 'DeepSeek', input: 0.70, output: 2.50 },
-      { model: 'DeepSeek R1 Distill-Qwen 32B', provider: 'DeepSeek', input: 0.29, output: 0.29 },
-      { model: 'DeepSeek R1 Distill-Llama 70B', provider: 'DeepSeek', input: 0.70, output: 0.80 },
-      { model: 'Gemma 3-27B', provider: 'Google', input: 0.08, output: 0.16 },
-      { model: 'Gemma 3-12B', provider: 'Google', input: 0.04, output: 0.13 },
-      { model: 'Gemma 3-4B', provider: 'Google', input: 0.04, output: 0.08 },
-      { model: 'Mistral Large 3', provider: 'Mistral', input: 2.00, output: 6.00 },
-      { model: 'Mistral Small 3.2', provider: 'Mistral', input: 0.075, output: 0.20 },
+      { model: 'GPT-4o', provider: 'OpenAI', input: 2.50, output: 10.00, cache: 0.50 },
+      { model: 'GPT-4o-mini', provider: 'OpenAI', input: 0.15, output: 0.60, cache: 0.50 },
+      { model: 'Claude Sonnet 4.6', provider: 'Anthropic', input: 3.00, output: 15.00, cache: 0.90 },
+      { model: 'Claude Opus 4.7', provider: 'Anthropic', input: 5.00, output: 25.00, cache: 0.90 },
+      { model: 'Claude Haiku 4', provider: 'Anthropic', input: 1.00, output: 5.00, cache: 0.90 },
+      { model: 'Gemini 2.5 Flash', provider: 'Google', input: 0.30, output: 2.50, cache: 0.75 },
+      { model: 'Gemini 2.5 Pro', provider: 'Google', input: 1.25, output: 10.00, cache: 0.75 },
+      { model: 'Gemini 3 (est.)', provider: 'Google', input: 2.00, output: 8.00, cache: 0.75 },
+      { model: 'Gemini 3 Flash (preview)', provider: 'Google', input: 0.50, output: 3.00, cache: 0.75 },
+      { model: 'Grok-3', provider: 'xAI', input: 3.00, output: 15.00, cache: 0.50 },
+      { model: 'Grok-3 Mini', provider: 'xAI', input: 0.30, output: 0.50, cache: 0.50 },
+      { model: 'Kimi k1.5', provider: 'Moonshot', input: 0.74, output: 3.49, cache: 0.50 },
+      { model: 'GLM-4-9B', provider: 'Zhipu', input: 0.10, output: 0.50, cache: 0.50 },
+      { model: 'GLM-4-32B', provider: 'Zhipu', input: 0.10, output: 0.10, cache: 0.50 },
+      { model: 'Qwen3-235B', provider: 'Alibaba', input: 0.071, output: 0.10, cache: 0.50 },
+      { model: 'Qwen3-32B', provider: 'Alibaba', input: 0.08, output: 0.24, cache: 0.50 },
+      { model: 'Qwen3-14B', provider: 'Alibaba', input: 0.06, output: 0.24, cache: 0.50 },
+      { model: 'Qwen3-8B', provider: 'Alibaba', input: 0.05, output: 0.40, cache: 0.50 },
+      { model: 'DeepSeek V4 Pro', provider: 'DeepSeek', input: 0.44, output: 0.87, cache: 0.50 },
+      { model: 'DeepSeek V4 Flash', provider: 'DeepSeek', input: 0.14, output: 0.28, cache: 0.50 },
+      { model: 'DeepSeek R1', provider: 'DeepSeek', input: 0.70, output: 2.50, cache: 0.50 },
+      { model: 'DeepSeek R1 Distill-Qwen 32B', provider: 'DeepSeek', input: 0.29, output: 0.29, cache: 0.50 },
+      { model: 'DeepSeek R1 Distill-Llama 70B', provider: 'DeepSeek', input: 0.70, output: 0.80, cache: 0.50 },
+      { model: 'Gemma 3-27B', provider: 'Google', input: 0.08, output: 0.16, cache: 0.50 },
+      { model: 'Gemma 3-12B', provider: 'Google', input: 0.04, output: 0.13, cache: 0.50 },
+      { model: 'Gemma 3-4B', provider: 'Google', input: 0.04, output: 0.08, cache: 0.50 },
+      { model: 'Mistral Large 3', provider: 'Mistral', input: 2.00, output: 6.00, cache: 0.50 },
+      { model: 'Mistral Small 3.2', provider: 'Mistral', input: 0.075, output: 0.20, cache: 0.50 },
     ];
+    const BATCH_DISCOUNT = 0.50;
 
     const PRESETS = [
       {
@@ -438,24 +439,35 @@
       return { gpu: GPUS[GPUS.length - 1], count: 8, multi: true };
     }
 
-    function calculateCosts(dailyVolume, avgTokens, inputRatio, gpuRec, apiModelName) {
+    function calculateCosts(dailyVolume, avgTokens, inputRatio, gpuRec, apiModelName, cacheHitRatio, gpuUtilization, batchEnabled) {
       const monthlyDays = 30;
       const monthlyCalls = dailyVolume * monthlyDays;
       const totalTokensMonthly = monthlyCalls * avgTokens;
-      
-      // Self-hosted
-      const selfHostedMonthly = gpuRec.gpu.hourly * 730 * gpuRec.count;
-      
-      // API
+
+      // Self-hosted (adjusted for real GPU utilization)
+      const util = Math.max(0.2, Math.min(1, gpuUtilization / 100));
+      const selfHostedBase = gpuRec.gpu.hourly * 730 * gpuRec.count;
+      const selfHostedMonthly = selfHostedBase / util;
+
+      // Storage cost (model weights on block storage)
+      const activeParamsForStorage = gpuRec._model?.active_params || gpuRec._model?.params || 7;
+      const quantBytesForStorage = QUANTIZATIONS.find(q => q.key === gpuRec._quant)?.bytes || 0.5;
+      const storageGB = (activeParamsForStorage * 1e9 * quantBytesForStorage) / 1e9;
+      const storageCost = storageGB * 0.10;
+
+      // API (with cache hit discount on input tokens)
       const apiPricing = API_PRICING.find(p => p.model === apiModelName) || API_PRICING[0];
+      const cacheMult = 1 - (cacheHitRatio / 100) * (apiPricing.cache || 0.5);
+      const batchMult = batchEnabled ? BATCH_DISCOUNT : 1;
+
       const inputTokens = totalTokensMonthly * (inputRatio / 100);
       const outputTokens = totalTokensMonthly * ((100 - inputRatio) / 100);
-      const apiMonthly = (inputTokens / 1e6 * apiPricing.input) + (outputTokens / 1e6 * apiPricing.output);
-      
+      const apiMonthly = ((inputTokens / 1e6 * apiPricing.input * cacheMult) + (outputTokens / 1e6 * apiPricing.output)) * batchMult;
+
       // Per transcript
       const selfHostedPerTranscript = selfHostedMonthly / monthlyCalls;
       const apiPerTranscript = apiMonthly / monthlyCalls;
-      
+
       return {
         selfHostedMonthly,
         apiMonthly,
@@ -465,15 +477,23 @@
         savings: Math.abs(selfHostedMonthly - apiMonthly),
         savingsPercent: Math.abs(selfHostedMonthly - apiMonthly) / Math.max(selfHostedMonthly, apiMonthly) * 100,
         apiPricing,
+        cacheMult,
+        batchMult,
+        storageCost,
+        gpuUtilization: util * 100,
       };
     }
 
-    function generateBreakEvenData(dailyVolume, avgTokens, inputRatio, gpuRec, apiModelName) {
+    function generateBreakEvenData(dailyVolume, avgTokens, inputRatio, gpuRec, apiModelName, cacheHitRatio, gpuUtilization, batchEnabled) {
       const apiPricing = API_PRICING.find(p => p.model === apiModelName) || API_PRICING[0];
-      const selfHostedMonthly = gpuRec.gpu.hourly * 730 * gpuRec.count;
+      const util = Math.max(0.2, Math.min(1, gpuUtilization / 100));
+      const selfHostedMonthly = gpuRec.gpu.hourly * 730 * gpuRec.count / util;
+
+      const cacheMult = 1 - (cacheHitRatio / 100) * (apiPricing.cache || 0.5);
+      const batchMult = batchEnabled ? BATCH_DISCOUNT : 1;
 
       // Compute break-even point to center the chart
-      const blendedPrice = (apiPricing.input * (inputRatio / 100) + apiPricing.output * ((100 - inputRatio) / 100));
+      const blendedPrice = (apiPricing.input * cacheMult * (inputRatio / 100) + apiPricing.output * ((100 - inputRatio) / 100)) * batchMult;
       const tokensPerMonthAtOneCall = avgTokens * 30;
       const costPerMonthAtOneCall = (tokensPerMonthAtOneCall / 1e6) * blendedPrice;
       const exactBreakEven = costPerMonthAtOneCall > 0 ? selfHostedMonthly / costPerMonthAtOneCall : 1000;
@@ -495,7 +515,7 @@
         const totalTokens = monthlyCalls * avgTokens;
         const inputTokens = totalTokens * (inputRatio / 100);
         const outputTokens = totalTokens * ((100 - inputRatio) / 100);
-        const apiCost = (inputTokens / 1e6 * apiPricing.input) + (outputTokens / 1e6 * apiPricing.output);
+        const apiCost = ((inputTokens / 1e6 * apiPricing.input * cacheMult) + (outputTokens / 1e6 * apiPricing.output)) * batchMult;
 
         return {
           volume: vol,
@@ -856,6 +876,9 @@
       const [inputRatio, setInputRatio] = useState(70);
       const [customParams, setCustomParams] = useState(7);
       const [apiModel, setApiModel] = useState('GPT-4o');
+      const [cacheHitRatio, setCacheHitRatio] = useState(0);
+      const [gpuUtilization, setGpuUtilization] = useState(85);
+      const [batchEnabled, setBatchEnabled] = useState(false);
       
       useEffect(() => {
         try {
@@ -889,17 +912,20 @@
         calculateVRAM(model, quantization, contextLength, concurrent),
       [model, quantization, contextLength, concurrent]);
       
-      const gpuRec = useMemo(() => 
-        recommendGPU(vramData.totalVRAM),
-      [vramData]);
+      const gpuRec = useMemo(() => {
+        const rec = recommendGPU(vramData.totalVRAM);
+        rec._model = model;
+        rec._quant = quantization;
+        return rec;
+      }, [vramData, model, quantization]);
       
       const costs = useMemo(() => 
-        calculateCosts(dailyVolume, avgTokens, inputRatio, gpuRec, apiModel),
-      [dailyVolume, avgTokens, inputRatio, gpuRec, apiModel]);
+        calculateCosts(dailyVolume, avgTokens, inputRatio, gpuRec, apiModel, cacheHitRatio, gpuUtilization, batchEnabled),
+      [dailyVolume, avgTokens, inputRatio, gpuRec, apiModel, cacheHitRatio, gpuUtilization, batchEnabled]);
       
       const breakEvenData = useMemo(() => 
-        generateBreakEvenData(dailyVolume, avgTokens, inputRatio, gpuRec, apiModel),
-      [dailyVolume, avgTokens, inputRatio, gpuRec, apiModel]);
+        generateBreakEvenData(dailyVolume, avgTokens, inputRatio, gpuRec, apiModel, cacheHitRatio, gpuUtilization, batchEnabled),
+      [dailyVolume, avgTokens, inputRatio, gpuRec, apiModel, cacheHitRatio, gpuUtilization, batchEnabled]);
       
       const breakEven = useMemo(() => findBreakEven(breakEvenData), [breakEvenData]);
       
@@ -1142,6 +1168,57 @@
                     </select>
                   </div>
                 </div>
+
+                <div className="gruv-card p-5">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider mb-4"
+                    style={{ color: 'var(--text-muted)' }}>
+                    Real-World Adjustments
+                  </h2>
+
+                  <Slider
+                    label="API Cache Hit Ratio"
+                    value={cacheHitRatio}
+                    min={0}
+                    max={90}
+                    step={5}
+                    onChange={setCacheHitRatio}
+                    format={v => `${v}%`}
+                  />
+                  <div className="text-xs mb-4 -mt-3" style={{ color: 'var(--text-muted)' }}>
+                    % of input tokens served from cache at {Math.round(costs.cacheMult * 100)}% of base price. System prompts and frequent passages get cached automatically.
+                  </div>
+
+                  <Slider
+                    label="GPU Utilization"
+                    value={gpuUtilization}
+                    min={20}
+                    max={100}
+                    step={5}
+                    onChange={setGpuUtilization}
+                    format={v => `${v}%`}
+                  />
+                  <div className="text-xs mb-4 -mt-3" style={{ color: 'var(--text-muted)' }}>
+                    Real GPUs rarely run at 100%. Idle gaps between requests inflate effective cost ×{parseFloat((1 / (gpuUtilization / 100)).toFixed(2))}.
+                  </div>
+
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <div>
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        API Batch Processing
+                      </span>
+                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        50% discount, 24h turnaround (OpenAI Batch API / Anthropic / Gemini)
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={batchEnabled}
+                      onChange={e => setBatchEnabled(e.target.checked)}
+                      className="w-5 h-5 rounded accent-[#fabd2f] cursor-pointer"
+                      style={{ accentColor: 'var(--accent-primary)' }}
+                    />
+                  </label>
+                </div>
               </div>
               
               {/* Right Panel - Outputs */}
@@ -1230,10 +1307,16 @@
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold font-mono" style={{ color: 'var(--accent-primary)' }}>
-                        ${(gpuRec.gpu.hourly * 730 * gpuRec.count).toFixed(0)}
+                        ${(gpuRec.gpu.hourly * 730 * gpuRec.count / (gpuUtilization / 100)).toFixed(0)}
                       </div>
-                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>/month</div>
+                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        /month ({gpuUtilization}% util → effective ${(gpuRec.gpu.hourly * gpuRec.count / (gpuUtilization / 100)).toFixed(2)}/hr)
+                      </div>
                     </div>
+                  </div>
+
+                  <div className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                    Weight storage: ~{costs.storageCost.toFixed(1)} GB × $0.10 = ${costs.storageCost.toFixed(2)}/mo
                   </div>
                   
                   {gpuRec.multi && (
@@ -1273,6 +1356,20 @@
                       <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
                         ${costs.apiPerTranscript.toFixed(4)}/transcript
                       </div>
+                      {(cacheHitRatio > 0 || batchEnabled) && (
+                        <div className="text-xs mt-2 flex flex-wrap gap-1.5">
+                          {cacheHitRatio > 0 && (
+                            <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--accent-success)' }}>
+                              {Math.round((1 - costs.cacheMult) * 100)}% cache savings
+                            </span>
+                          )}
+                          {batchEnabled && (
+                            <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--accent-purple)' }}>
+                              50% batch discount
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   
