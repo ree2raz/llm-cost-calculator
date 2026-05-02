@@ -763,6 +763,10 @@
                 {vol >= 1000 ? (vol / 1000) + 'k' : vol}/day
               </text>
             ))}
+            <text x={width - padding.right} y={height - padding.bottom + 32} textAnchor="end" 
+              fontSize="9" fill="var(--text-muted)" fontStyle="italic">
+              Log scale
+            </text>
             
             {/* Lines */}
             <path d={selfHostedPath} fill="none" stroke="var(--chart-self)" strokeWidth={2.5} />
@@ -1289,8 +1293,9 @@
                   <BreakEvenChart data={breakEvenData} breakEven={breakEven} />
                   
                   <div className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Self-hosted cost is flat (always-on GPU). API cost scales linearly with volume. 
-                    The intersection shows the daily volume where renting a GPU becomes cheaper than API calls.
+                    <strong>Math note:</strong> Self-hosted cost is flat (always-on GPU). API cost scales <em>linearly</em> with token volume — you pay per token, not exponentially. 
+                    The X-axis uses a log scale (1 → 10,000 calls/day) so both small and large volumes fit on one chart. On a log-scale axis, a straight line becomes a curve. 
+                    The intersection shows the exact daily volume where renting a GPU becomes cheaper than API calls.
                   </div>
                 </div>
               </div>
