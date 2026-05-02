@@ -471,22 +471,32 @@
     function generateBreakEvenData(dailyVolume, avgTokens, inputRatio, gpuRec, apiModelName) {
       const apiPricing = API_PRICING.find(p => p.model === apiModelName) || API_PRICING[0];
       const selfHostedMonthly = gpuRec.gpu.hourly * 730 * gpuRec.count;
-      
+
+      // Compute break-even point to center the chart
+      const blendedPrice = (apiPricing.input * (inputRatio / 100) + apiPricing.output * ((100 - inputRatio) / 100));
+      const tokensPerMonthAtOneCall = avgTokens * 30;
+      const costPerMonthAtOneCall = (tokensPerMonthAtOneCall / 1e6) * blendedPrice;
+      const exactBreakEven = costPerMonthAtOneCall > 0 ? selfHostedMonthly / costPerMonthAtOneCall : 1000;
+
+      // Chart range: 0 to max(2× break-even, 5000) so the intersection is visible
+      const maxVolume = Math.max(5000, Math.ceil(exactBreakEven * 2));
+      const step = Math.max(50, Math.round(maxVolume / 50));
+
       const volumes = [];
-      for (let i = 0; i <= 100; i++) {
-        const vol = Math.round(Math.exp(Math.log(1) + (Math.log(10000) - Math.log(1)) * (i / 100)));
-        if (volumes.length === 0 || volumes[volumes.length - 1] !== vol) {
-          volumes.push(vol);
-        }
+      for (let vol = 0; vol <= maxVolume; vol += step) {
+        volumes.push(vol);
       }
-      
+      if (volumes[volumes.length - 1] !== maxVolume) {
+        volumes.push(maxVolume);
+      }
+
       return volumes.map(vol => {
         const monthlyCalls = vol * 30;
         const totalTokens = monthlyCalls * avgTokens;
         const inputTokens = totalTokens * (inputRatio / 100);
         const outputTokens = totalTokens * ((100 - inputRatio) / 100);
         const apiCost = (inputTokens / 1e6 * apiPricing.input) + (outputTokens / 1e6 * apiPricing.output);
-        
+
         return {
           volume: vol,
           selfHosted: selfHostedMonthly,
@@ -671,11 +681,10 @@
         ...data.map(d => Math.max(d.selfHosted, d.api))
       );
       
+      const maxVolume = data.length > 0 ? data[data.length - 1].volume : 5000;
+
       const xScale = (vol) => {
-        const logMin = Math.log(1);
-        const logMax = Math.log(10000);
-        const logVol = Math.log(vol);
-        return padding.left + ((logVol - logMin) / (logMax - logMin)) * chartWidth;
+        return padding.left + (vol / maxVolume) * chartWidth;
       };
       
       const yScale = (cost) => {
@@ -757,16 +766,20 @@
             })}
             
             {/* X-axis labels */}
-            {[1, 10, 100, 1000, 10000].map(vol => (
-              <text key={vol} x={xScale(vol)} y={height - padding.bottom + 18} textAnchor="middle" 
-                fontSize="10" fill="var(--text-muted)">
-                {vol >= 1000 ? (vol / 1000) + 'k' : vol}/day
-              </text>
-            ))}
-            <text x={width - padding.right} y={height - padding.bottom + 32} textAnchor="end" 
-              fontSize="9" fill="var(--text-muted)" fontStyle="italic">
-              Log scale
-            </text>
+            {(() => {
+              const ticks = [];
+              const step = Math.max(500, Math.round(maxVolume / 5));
+              for (let v = 0; v <= maxVolume; v += step) {
+                ticks.push(v);
+              }
+              if (ticks[ticks.length - 1] !== maxVolume) ticks.push(maxVolume);
+              return ticks.map(vol => (
+                <text key={vol} x={xScale(vol)} y={height - padding.bottom + 18} textAnchor="middle"
+                  fontSize="10" fill="var(--text-muted)">
+                  {vol >= 1000 ? (vol / 1000).toFixed(1) + 'k' : vol}
+                </text>
+              ));
+            })()}
             
             {/* Lines */}
             <path d={selfHostedPath} fill="none" stroke="var(--chart-self)" strokeWidth={2.5} />
@@ -1293,8 +1306,7 @@
                   <BreakEvenChart data={breakEvenData} breakEven={breakEven} />
                   
                   <div className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    <strong>Math note:</strong> Self-hosted cost is flat (always-on GPU). API cost scales <em>linearly</em> with token volume — you pay per token, not exponentially. 
-                    The X-axis uses a log scale (1 → 10,000 calls/day) so both small and large volumes fit on one chart. On a log-scale axis, a straight line becomes a curve. 
+                    Self-hosted cost is flat (always-on GPU). API cost scales linearly with token volume — you pay per token. 
                     The intersection shows the exact daily volume where renting a GPU becomes cheaper than API calls.
                   </div>
                 </div>
