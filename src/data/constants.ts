@@ -115,10 +115,10 @@ export const MODELS: Record<string, ModelFamily> = {
     ]
   },
   'qwen36': {
-    family: 'Qwen3.6 (Alibaba)',
+    family: 'Qwen3.6 (Alibaba, est.)',
     variants: [
-      { name: 'Qwen3.6-27B', params: 28, layers: 48, hidden: 6144, heads: 48, kv_heads: 8, context: 131072, arch: 'gqa' },
-      { name: 'Qwen3.6-35B (MoE)', params: 36, active_params: 3, layers: 48, hidden: 5120, heads: 32, kv_heads: 8, context: 131072, arch: 'moe', moe_topk: 8 },
+      { name: 'Qwen3.6-27B (est.)', params: 28, layers: 48, hidden: 6144, heads: 48, kv_heads: 8, context: 131072, arch: 'gqa' },
+      { name: 'Qwen3.6-35B MoE (est.)', params: 36, active_params: 3, layers: 48, hidden: 5120, heads: 32, kv_heads: 8, context: 131072, arch: 'moe', moe_topk: 8 },
     ]
   },
   'gemma3': {
@@ -131,12 +131,12 @@ export const MODELS: Record<string, ModelFamily> = {
     ]
   },
   'gemma4': {
-    family: 'Gemma 4 (Google)',
+    family: 'Gemma 4 (Google, est.)',
     variants: [
-      { name: 'Gemma 4-E2B', params: 5, layers: 36, hidden: 3072, heads: 16, kv_heads: 8, context: 131072, arch: 'gqa' },
-      { name: 'Gemma 4-E4B', params: 8, layers: 40, hidden: 4096, heads: 32, kv_heads: 8, context: 131072, arch: 'gqa' },
-      { name: 'Gemma 4-26B-A4B (MoE)', params: 27, active_params: 4, layers: 48, hidden: 5120, heads: 32, kv_heads: 8, context: 131072, arch: 'moe', moe_topk: 8 },
-      { name: 'Gemma 4-31B', params: 33, layers: 64, hidden: 6144, heads: 48, kv_heads: 8, context: 131072, arch: 'gqa' },
+      { name: 'Gemma 4-E2B (est.)', params: 5, layers: 36, hidden: 3072, heads: 16, kv_heads: 8, context: 131072, arch: 'gqa' },
+      { name: 'Gemma 4-E4B (est.)', params: 8, layers: 40, hidden: 4096, heads: 32, kv_heads: 8, context: 131072, arch: 'gqa' },
+      { name: 'Gemma 4-26B-A4B MoE (est.)', params: 27, active_params: 4, layers: 48, hidden: 5120, heads: 32, kv_heads: 8, context: 131072, arch: 'moe', moe_topk: 8 },
+      { name: 'Gemma 4-31B (est.)', params: 33, layers: 64, hidden: 6144, heads: 48, kv_heads: 8, context: 131072, arch: 'gqa' },
     ]
   },
   'phi4': {

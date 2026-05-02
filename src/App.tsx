@@ -37,7 +37,7 @@ export default function App() {
   const [batchEnabled, setBatchEnabled] = useState(false);
   const [replicaCount, setReplicaCount] = useState(2);
   const [peakFactor, setPeakFactor] = useState(1.5);
-  const [pricingTier, setPricingTier] = useState('reserved_1y');
+  const [pricingTier, setPricingTier] = useState('on_demand');
   const [mfu, setMfu] = useState(0.35);
   const [resetKey, setResetKey] = useState(0);
 
@@ -150,7 +150,7 @@ export default function App() {
     setAvgTokens(1500); setInputRatio(70); setCustomParams(7);
     setApiModel('GPT-4o'); setCacheHitRatio(0); setGpuUtilization(85);
     setBatchEnabled(false); setKvDtype('fp16'); setReplicaCount(2);
-    setPeakFactor(1.5); setPricingTier('reserved_1y'); setMfu(0.35);
+    setPeakFactor(1.5); setPricingTier('on_demand'); setMfu(0.35);
     setResetKey(k => k + 1);
   };
 
@@ -420,7 +420,7 @@ export default function App() {
                 <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
                   <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--chart-self)' }}>Self-hosted</div>
                   <div className="text-xl font-bold font-mono" style={{ color: 'var(--text-primary)' }}>${costs.selfHostedMonthly.toFixed(0)}<span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>/mo</span></div>
-                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>${costs.selfHostedPerTranscript.toFixed(4)}/request · {costs.storageCost.toFixed(1)} GB storage</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>${costs.selfHostedPerTranscript.toFixed(4)}/request {costs.storageCost > 1 ? `· ${costs.storageCost.toFixed(1)} GB artifact storage` : ''}</div>
                 </div>
                 <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
                   <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--chart-api)' }}>API ({costs.apiPricing.provider})</div>
