@@ -1304,11 +1304,17 @@
             {/* Footer */}
             <footer className="mt-12 pt-6 text-center text-xs" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
               <p>
-                Architecture data based on published technical reports. GPU pricing approximate (RunPod/Lambda). 
+                Architecture data based on published technical reports. GPU pricing approximate (RunPod/Lambda).
                 API pricing from OpenRouter as of April 2026. Closed-source model architectures are estimates.
               </p>
-              <p className="mt-1">
-                Built for CTOs evaluating AI infrastructure decisions.
+              <p className="mt-2 flex items-center justify-center gap-4">
+                <a href="https://www.rituraj.info/posts/on-prem-llm-deployment-cto/" target="_blank" rel="noopener noreferrer" className="underline hover:no-underline transition-colors" style={{ color: 'var(--accent-primary)' }}>
+                  Read the blog post
+                </a>
+                <span style={{ color: 'var(--border)' }}>|</span>
+                <a href="https://github.com/ree2raz/llm-cost-calculator" target="_blank" rel="noopener noreferrer" className="underline hover:no-underline transition-colors" style={{ color: 'var(--accent-primary)' }}>
+                  GitHub repo
+                </a>
               </p>
             </footer>
           </main>
