@@ -36,8 +36,8 @@ export default function App() {
   const [gpuUtilization, setGpuUtilization] = useState(85);
   const [batchEnabled, setBatchEnabled] = useState(false);
   const [replicaCount, setReplicaCount] = useState(2);
-  const [peakFactor, setPeakFactor] = useState(2.0);
-  const [pricingTier, setPricingTier] = useState('on_demand');
+  const [peakFactor, setPeakFactor] = useState(1.5);
+  const [pricingTier, setPricingTier] = useState('reserved_1y');
   const [mfu, setMfu] = useState(0.35);
   const [resetKey, setResetKey] = useState(0);
 
@@ -150,7 +150,7 @@ export default function App() {
     setAvgTokens(1500); setInputRatio(70); setCustomParams(7);
     setApiModel('GPT-4o'); setCacheHitRatio(0); setGpuUtilization(85);
     setBatchEnabled(false); setKvDtype('fp16'); setReplicaCount(2);
-    setPeakFactor(2.0); setPricingTier('on_demand'); setMfu(0.35);
+    setPeakFactor(1.5); setPricingTier('reserved_1y'); setMfu(0.35);
     setResetKey(k => k + 1);
   };
 
@@ -369,7 +369,7 @@ export default function App() {
                   Infrastructure & Cost
                 </h2>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium px-2 py-1 rounded-md"
+                  <span className="text-sm font-semibold px-2 py-1 rounded-md"
                     style={{ backgroundColor: costs.winner === 'self' ? 'rgba(184, 187, 38, 0.15)' : 'rgba(251, 73, 52, 0.15)', color: costs.winner === 'self' ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
                     {costs.winner === 'self' ? 'Self-hosted wins by' : 'API wins by'} {costs.savingsPercent.toFixed(0)}%
                   </span>

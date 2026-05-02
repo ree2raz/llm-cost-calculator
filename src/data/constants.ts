@@ -103,6 +103,24 @@ export const MODELS: Record<string, ModelFamily> = {
       { name: 'Qwen3-235B (MoE)', params: 235, active_params: 32, layers: 64, hidden: 8192, heads: 64, kv_heads: 8, context: 131072, arch: 'moe', moe_topk: 8 },
     ]
   },
+  'qwen35': {
+    family: 'Qwen3.5 (Alibaba)',
+    variants: [
+      { name: 'Qwen3.5-0.8B', params: 0.8, layers: 24, hidden: 1024, heads: 16, kv_heads: 4, context: 32768, arch: 'gqa' },
+      { name: 'Qwen3.5-4B', params: 4, layers: 36, hidden: 2560, heads: 20, kv_heads: 4, context: 32768, arch: 'gqa' },
+      { name: 'Qwen3.5-9B', params: 9, layers: 36, hidden: 4096, heads: 32, kv_heads: 8, context: 131072, arch: 'gqa' },
+      { name: 'Qwen3.5-27B', params: 27, layers: 48, hidden: 6144, heads: 48, kv_heads: 8, context: 131072, arch: 'gqa' },
+      { name: 'Qwen3.5-35B (MoE)', params: 36, active_params: 3, layers: 48, hidden: 5120, heads: 32, kv_heads: 8, context: 131072, arch: 'moe', moe_topk: 8 },
+      { name: 'Qwen3.5-122B (MoE)', params: 125, active_params: 10, layers: 64, hidden: 8192, heads: 64, kv_heads: 8, context: 131072, arch: 'moe', moe_topk: 8 },
+    ]
+  },
+  'qwen36': {
+    family: 'Qwen3.6 (Alibaba)',
+    variants: [
+      { name: 'Qwen3.6-27B', params: 28, layers: 48, hidden: 6144, heads: 48, kv_heads: 8, context: 131072, arch: 'gqa' },
+      { name: 'Qwen3.6-35B (MoE)', params: 36, active_params: 3, layers: 48, hidden: 5120, heads: 32, kv_heads: 8, context: 131072, arch: 'moe', moe_topk: 8 },
+    ]
+  },
   'gemma3': {
     family: 'Gemma 3 (Google)',
     variants: [
@@ -110,6 +128,15 @@ export const MODELS: Record<string, ModelFamily> = {
       { name: 'Gemma 3-4B', params: 4, layers: 34, hidden: 2560, heads: 8, kv_heads: 4, context: 131072, arch: 'gqa' },
       { name: 'Gemma 3-12B', params: 12, layers: 48, hidden: 3840, heads: 16, kv_heads: 16, context: 131072, arch: 'mha' },
       { name: 'Gemma 3-27B', params: 27, layers: 48, hidden: 5376, heads: 16, kv_heads: 8, context: 131072, arch: 'gqa' },
+    ]
+  },
+  'gemma4': {
+    family: 'Gemma 4 (Google)',
+    variants: [
+      { name: 'Gemma 4-E2B', params: 5, layers: 36, hidden: 3072, heads: 16, kv_heads: 8, context: 131072, arch: 'gqa' },
+      { name: 'Gemma 4-E4B', params: 8, layers: 40, hidden: 4096, heads: 32, kv_heads: 8, context: 131072, arch: 'gqa' },
+      { name: 'Gemma 4-26B-A4B (MoE)', params: 27, active_params: 4, layers: 48, hidden: 5120, heads: 32, kv_heads: 8, context: 131072, arch: 'moe', moe_topk: 8 },
+      { name: 'Gemma 4-31B', params: 33, layers: 64, hidden: 6144, heads: 48, kv_heads: 8, context: 131072, arch: 'gqa' },
     ]
   },
   'phi4': {
@@ -169,6 +196,12 @@ export const API_PRICING: APIPricing[] = [
   { model: 'Qwen3-32B', provider: 'Alibaba', input: 0.08, output: 0.24, cache: 0.50 },
   { model: 'Qwen3-14B', provider: 'Alibaba', input: 0.06, output: 0.24, cache: 0.50 },
   { model: 'Qwen3-8B', provider: 'Alibaba', input: 0.05, output: 0.40, cache: 0.50 },
+  { model: 'Qwen3.5-9B', provider: 'Alibaba', input: 0.06, output: 0.24, cache: 0.50 },
+  { model: 'Qwen3.5-4B', provider: 'Alibaba', input: 0.04, output: 0.12, cache: 0.50 },
+  { model: 'Qwen3.5-27B', provider: 'Alibaba', input: 0.10, output: 0.30, cache: 0.50 },
+  { model: 'Qwen3.5-35B (MoE)', provider: 'Alibaba', input: 0.15, output: 0.40, cache: 0.50 },
+  { model: 'Qwen3.6-27B', provider: 'Alibaba', input: 0.12, output: 0.35, cache: 0.50 },
+  { model: 'Qwen3.6-35B (MoE)', provider: 'Alibaba', input: 0.18, output: 0.45, cache: 0.50 },
   { model: 'DeepSeek V4 Pro', provider: 'DeepSeek', input: 0.44, output: 0.87, cache: 0.50 },
   { model: 'DeepSeek V4 Flash', provider: 'DeepSeek', input: 0.14, output: 0.28, cache: 0.50 },
   { model: 'DeepSeek R1', provider: 'DeepSeek', input: 0.70, output: 2.50, cache: 0.50 },
@@ -177,6 +210,10 @@ export const API_PRICING: APIPricing[] = [
   { model: 'Gemma 3-27B', provider: 'Google', input: 0.08, output: 0.16, cache: 0.50 },
   { model: 'Gemma 3-12B', provider: 'Google', input: 0.04, output: 0.13, cache: 0.50 },
   { model: 'Gemma 3-4B', provider: 'Google', input: 0.04, output: 0.08, cache: 0.50 },
+  { model: 'Gemma 4-31B', provider: 'Google', input: 0.12, output: 0.24, cache: 0.50 },
+  { model: 'Gemma 4-26B (MoE)', provider: 'Google', input: 0.08, output: 0.18, cache: 0.50 },
+  { model: 'Gemma 4-E4B', provider: 'Google', input: 0.05, output: 0.10, cache: 0.50 },
+  { model: 'Gemma 4-E2B', provider: 'Google', input: 0.03, output: 0.06, cache: 0.50 },
   { model: 'Mistral Large 3', provider: 'Mistral', input: 2.00, output: 6.00, cache: 0.50 },
   { model: 'Mistral Small 3.2', provider: 'Mistral', input: 0.075, output: 0.20, cache: 0.50 },
 ];
