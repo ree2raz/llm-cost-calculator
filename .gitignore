@@ -4,4 +4,4 @@ CONTEXT.md
 *.log
 node_modules/
 openrouter_models_extracted.json
-dist/
+#dist/
