@@ -105,4 +105,4 @@ See `CONTEXT.md` for design rationale and update procedures. Key files:
 
 ## License
 
-Apache License 2.0. See [LICENSE](https://github.com/ree2raz/llm-cost-calculator/blob/main/LICENSE).
+MIT License. See [LICENSE](https://github.com/ree2raz/llm-cost-calculator/blob/main/LICENSE).
