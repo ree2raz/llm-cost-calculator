@@ -40,67 +40,22 @@
 
 ```bash
 npm install
-npm run dev      # Vite dev server (localhost:5173)
-npm run build    # Production build to dist/
-npm run preview  # Preview production build
-npm run typecheck  # TypeScript --noEmit
+npm run dev        # Vite dev server (localhost:5173)
+npm run build      # Production build → docs/
+npm run preview     # Preview production build
+npm run typecheck   # TypeScript --noEmit
 ```
-
-## Project Structure
-
-```
-src/
-├── main.tsx               Entry point
-├── App.tsx                 Full component tree
-├── index.css               Gruvbox theme + slider/chart/badge styles
-├── data/
-│   └── constants.ts        MODELS, GPUS, API_PRICING, PRESETS, interfaces
-├── lib/
-│   └── calculations.ts     VRAM, throughput, cost, break-even (pure TS)
-└── components/
-    ├── Slider.tsx
-    ├── ThemeToggle.tsx
-    ├── PresetSelector.tsx
-    └── BreakEvenChart.tsx  Step-function SVG chart with tooltips
-```
-
-No backend. No analytics. No cookies beyond theme preference (localStorage). All math runs in the browser.
-
-## Architecture
-
-### VRAM Model
-```
-VRAM = (total_params × quant_bytes + kv_per_token × context × concurrent) × 1.15 overload
-```
-- `total_params` for MoE (all experts loaded), `active_params` for compute only
-- KV cache dtype is independent of weight quantization
-- MLA models use `kv_dim` instead of `kv_heads × head_dim`
-
-### Throughput Model
-```
-prefill_tps = MFU × GPU_FP16_TFLOPS ÷ (2 × active_params)  [compute-bound]
-decode_tps  = B × HBM_GBW ÷ (weights_bytes + B × KV_per_seq)  [bandwidth-bound]
-```
-- Prefill ignores quantization (kernels dequantize and run FP16 math)
-- Decode respects quantization (fewer bytes to read from HBM)
-- GPU count = max(gpu_for_prefill, gpu_for_decode, gpu_for_vram)
-
-### GPU Selection
-- Evaluates all GPUs, picks lowest cost/month
-- Filters non-TP-capable GPUs (RTX 3090/4090/5090, L4, A10G) when multi-GPU needed
-- Respects `replica_count` for HA (multiplied on top, replicas are independent hosts)
 
 ## Deployment
 
-Push to `main` branch:
+Build to `docs/` and push to `main`:
 
 ```bash
-npm run build
-cp -r dist/* docs/
+npm run build       # outputs to docs/ (includes CNAME)
 git add docs/ && git commit -m "deploy" && git push
 ```
 
-GitHub Pages serves from `docs/` at `llm-cost.rituraj.info` via CNAME.
+GitHub Pages serves from the `docs/` folder at `llm-cost.rituraj.info` (CNAME auto-copied during build).
 
 ## Maintenance
 
