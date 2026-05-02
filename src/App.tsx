@@ -202,7 +202,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT: Inputs (4 cols) */}
-          <div className="lg:col-span-4 space-y-5">
+          <div className="lg:col-span-4 space-y-5 order-last lg:order-none">
             {/* Model & Deployment */}
             <div className="gruv-card p-5">
               <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>
@@ -361,7 +361,7 @@ export default function App() {
           </div>
 
           {/* RIGHT: Outputs (8 cols) */}
-          <div className="lg:col-span-8 space-y-5">
+          <div className="lg:col-span-8 space-y-5 order-first lg:order-none">
             {/* Infrastructure & Cost */}
             <div className="gruv-card p-5">
               <div className="flex items-center justify-between mb-4">
