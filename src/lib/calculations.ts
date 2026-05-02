@@ -262,6 +262,7 @@ export function generateBreakEvenData(
   model: ModelVariant,
   quantization: string,
   kvDtype: string,
+  contextLength: number,
   concurrentRequests: number,
   peakFactor: number,
   replicas: number,
@@ -296,7 +297,7 @@ export function generateBreakEvenData(
     const outputTokens = totalTokens * ((100 - inputRatio) / 100);
     const apiCost = ((inputTokens / 1e6 * apiPricing.input * cacheMult) + (outputTokens / 1e6 * apiPricing.output)) * batchMult;
 
-    const vramData = calculateVRAM(model, quantization, kvDtype, Math.min(concurrentRequests * avgTokens * 0.1, 131072), concurrentRequests);
+    const vramData = calculateVRAM(model, quantization, kvDtype, contextLength, concurrentRequests);
     const gpuRec = recommendGPU(vramData, model, quantization, kvDtype, avgTokens, inputRatio, vol, concurrentRequests, peakFactor, replicas, mfu);
     const selfHosted = (gpuRec.count * gpuRec.gpu.hourly * 730 * tierMult) / util;
 

@@ -123,8 +123,8 @@ export default function App() {
   [dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier]);
 
   const breakEvenData = useMemo(() =>
-    generateBreakEvenData(avgTokens, inputRatio, model, quantization, kvDtype, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, cacheHitRatio, batchEnabled, pricingTier),
-  [avgTokens, inputRatio, model, quantization, kvDtype, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, cacheHitRatio, batchEnabled, pricingTier]);
+    generateBreakEvenData(avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, cacheHitRatio, batchEnabled, pricingTier),
+  [avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, cacheHitRatio, batchEnabled, pricingTier]);
 
   const breakEvenVal = useMemo(() => findBreakEven(breakEvenData), [breakEvenData]);
 
