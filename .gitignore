@@ -3,3 +3,5 @@ CONTEXT.md
 .DS_Store
 *.log
 node_modules/
+openrouter_models_extracted.json
+dist/

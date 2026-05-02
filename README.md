@@ -1,112 +1,115 @@
 # LLM Deploy Cost Calculator
 
-> **Live at:** [https://llm-cost.rituraj.info/](https://llm-cost.rituraj.info/)
+**Production-grade GPU sizing, cost comparison, and break-even analysis for LLM deployment.**
 
-A single-page, client-side calculator that helps CTOs and engineering leaders answer the three most critical infrastructure questions:
+**[llm-cost.rituraj.info](https://llm-cost.rituraj.info)**
 
-1. **What GPU do we need?** — Architecture-aware VRAM calculation with real GPU recommendations
-2. **What does it cost monthly?** — Side-by-side self-hosted vs API cost comparison
-3. **When does self-hosted beat API?** — Interactive break-even analysis
+## What It Answers
 
-Built as a zero-dependency artifact (React + Tailwind via CDN) for instant deployment anywhere.
+1. **What GPU do I need?** Architecture-aware VRAM calculation (GQA, MLA, MoE) + throughput modeling (prefill compute-bound, decode bandwidth-bound). Not just `params × 2 bytes`.
+2. **What will it cost?** Self-hosted GPU rental vs API calls with pricing tiers (on-demand, reserved-1y, spot), HA replicas, peak factor, GPU utilization, cache hit ratios, and batch discounts.
+3. **When does self-hosted beat API?** Step-function break-even chart showing where GPU count jumps and the exact volume where self-hosting becomes cheaper.
 
----
+## UX
 
-## Features
-
-- **30+ current-generation models** including Qwen3, Gemma 3/4, Phi-4, Mistral, DeepSeek V4/R1, GPT-4o, Claude Sonnet/Opus/Haiku, Gemini 2.5/3, Grok-3, Kimi k1.5, GLM-4
-- **Architecture-aware VRAM math** — accounts for GQA, MLA (DeepSeek), and standard MHA attention mechanisms
-- **Real GPU database** — RTX 3090 through H200 141GB with hourly pricing from RunPod/Lambda
-- **Multi-GPU auto-detection** — suggests tensor-parallel configs when no single GPU fits
-- **Interactive SVG break-even chart** — log-scale with hover tooltips and intersection annotation
-- **Gruvbox dark/light theme** — warm, premium aesthetic with persistent preference
-- **5 relatable presets** — Customer Support Bot, Code Assistant, Enterprise RAG, Startup MVP, High-Volume API Replacement
-- **Custom model support** — enter any parameter count (0.5B–500B), architecture auto-estimated from modern scaling laws
-
----
+- **Answer-first layout** — sticky decision bar at the top always shows self-hosted $/mo vs API $/mo with the winner callout and break-even point. No scrolling to find the answer.
+- **Two-column inputs** — Model & Deployment and Traffic & API. Advanced controls (peak factor, HA replicas, MFU, cache ratio) are collapsed in `<details>` panels to reduce noise.
+- **Right column ordered for decision flow** — GPU recommendation → break-even chart → VRAM breakdown (engineering detail last).
+- **Shareable URL state** — every scenario is a link encoded in query params. CTOs can share with Finance, eng leads, or their CEO.
+- **Calculation formulas exposed** — "Show calculation formulas" disclosure panel shows prefill TPS, decode TPS, KV per token, and VRAM formulas with the user's current inputs substituted in.
 
 ## Tech Stack
 
-- **React 18** (UMD via CDN)
-- **Tailwind CSS** (CDN)
-- **SVG** for the break-even chart (zero charting libraries)
-- **Babel Standalone** for JSX transformation
-- **No build step, no backend, no API keys**
+- **Vite + TypeScript + React 18** — pre-compiled (57KB gzipped JS), no browser JIT
+- **Tailwind CSS** with Gruvbox theme (dark/light) — no CDN, all bundled
+- **Zero runtime dependencies beyond React** — all math is pure TypeScript
 
----
+## Features
 
-## Architecture Highlights
+- 30+ model variants across Qwen3, Gemma 3/4, Phi-4, Mistral, DeepSeek (+ custom model)
+- 10 GPU options (L4 to H200) with `tp_capable` flag — consumer GPUs filtered out for multi-GPU
+- Separate weight quantization (FP16, Q8, Q4) and KV cache precision (FP16, FP8, INT4)
+- Throughput model: prefill (compute-bound, ignores quantization) + decode (memory-bandwidth-bound, respects quantization)
+- MFU slider (20–50%) for realistic FLOPS utilization
+- KV cache aware: MHA ×16, GQA ×4–8, MLA ×～50 compression
+- MoE aware: total params for VRAM, active params for compute
+- Pricing tiers: on-demand (1×), reserved-1y (0.65×), spot (0.35×)
+- 5 real-world presets with tuned peak factors and pricing tiers
 
-### VRAM Calculation
+## Development
+
+```bash
+npm install
+npm run dev      # Vite dev server (localhost:5173)
+npm run build    # Production build to dist/
+npm run preview  # Preview production build
+npm run typecheck  # TypeScript --noEmit
+```
+
+## Project Structure
 
 ```
-model_vram = active_params × bytes_per_param
-kv_cache = 2 × layers × kv_heads × head_dim × context × concurrent × bytes_per_param
-total_vram = (model_vram + kv_cache) × 1.15  // 15% overhead
+src/
+├── main.tsx               Entry point
+├── App.tsx                 Full component tree
+├── index.css               Gruvbox theme + slider/chart/badge styles
+├── data/
+│   └── constants.ts        MODELS, GPUS, API_PRICING, PRESETS, interfaces
+├── lib/
+│   └── calculations.ts     VRAM, throughput, cost, break-even (pure TS)
+└── components/
+    ├── Slider.tsx
+    ├── ThemeToggle.tsx
+    ├── PresetSelector.tsx
+    └── BreakEvenChart.tsx  Step-function SVG chart with tooltips
 ```
 
-- **MLA (DeepSeek):** Uses compressed latent dimension (~10× smaller KV cache)
-- **GQA:** Reduces KV heads by 4–8× vs MHA
-- **MoE:** Uses active parameters, not total parameters
+No backend. No analytics. No cookies beyond theme preference (localStorage). All math runs in the browser.
+
+## Architecture
+
+### VRAM Model
+```
+VRAM = (total_params × quant_bytes + kv_per_token × context × concurrent) × 1.15 overload
+```
+- `total_params` for MoE (all experts loaded), `active_params` for compute only
+- KV cache dtype is independent of weight quantization
+- MLA models use `kv_dim` instead of `kv_heads × head_dim`
+
+### Throughput Model
+```
+prefill_tps = MFU × GPU_FP16_TFLOPS ÷ (2 × active_params)  [compute-bound]
+decode_tps  = B × HBM_GBW ÷ (weights_bytes + B × KV_per_seq)  [bandwidth-bound]
+```
+- Prefill ignores quantization (kernels dequantize and run FP16 math)
+- Decode respects quantization (fewer bytes to read from HBM)
+- GPU count = max(gpu_for_prefill, gpu_for_decode, gpu_for_vram)
 
 ### GPU Selection
+- Evaluates all GPUs, picks lowest cost/month
+- Filters non-TP-capable GPUs (RTX 3090/4090/5090, L4, A10G) when multi-GPU needed
+- Respects `replica_count` for HA (multiplied on top, replicas are independent hosts)
 
-Picks the cheapest single GPU that fits the VRAM requirement. If none fit, suggests multi-GPU configurations (2×, 4×, 8×) with a complexity warning.
+## Deployment
 
-### Cost Comparison
+Push to `main` branch:
 
-- **Self-hosted:** GPU hourly rate × 730 hours/month
-- **API:** (input_tokens × input_price + output_tokens × output_price) / 1M
-- **Per-transcript cost** for both paths
-
----
-
-## Usage
-
-### Deployed (Recommended)
-[https://llm-cost.rituraj.info/](https://llm-cost.rituraj.info/)
-
-### Local Development
 ```bash
-git clone git@github.com:ree2raz/llm-cost-calculator.git
-cd llm-cost-calculator
-python3 -m http.server 8000
-# Open http://localhost:8000
+npm run build
+cp -r dist/* docs/
+git add docs/ && git commit -m "deploy" && git push
 ```
 
-No `npm install`, no build step. The entire app is in `index.html`.
+GitHub Pages serves from `docs/` at `llm-cost.rituraj.info` via CNAME.
 
----
+## Maintenance
 
-## Model Data Sources
+See `CONTEXT.md` (private) for update cadence, design rationale, and model metadata sourcing. Key update files:
 
-- **API pricing:** OpenRouter (April 2026)
-- **Architecture metadata:** Published technical reports (Qwen3, Gemma 3, DeepSeek V4, etc.)
-- **GPU pricing:** RunPod Community Cloud / Lambda Cloud (approximate, update monthly)
-- **Closed-source architectures:** Best-effort estimates based on parameter count and generation
-
----
-
-## Roadmap
-
-- [ ] Add more cloud providers (CoreWeave, Vast.ai, Salad)
-- [ ] Fine-tuning cost estimator (LoRA vs full fine-tune)
-- [ ] Batch inference optimization calculator
-- [ ] Export to PDF / shareable link with query params
-- [ ] Mobile-native PWA support
-
----
-
-## License
-
-MIT
-
----
-
-Built for CTOs evaluating AI infrastructure decisions. If you have questions beyond what the calculator answers — model update strategy, operational maintenance, team hiring — those are consulting conversations, not calculator inputs.
-
----
-
-## See also
-
-- [Blog post: What your buyer's CTO asks before approving on-prem LLM deployment](https://rituraj.info/posts/on-prem-llm-deployment-cto/) — Covers all five CTO questions: GPU sizing, monthly cost, break-even, model update strategy, and operational maintenance.
+| What | File | Cadence |
+|------|------|---------|
+| API pricing | `src/data/constants.ts` → `API_PRICING` | Monthly |
+| GPU pricing | `src/data/constants.ts` → `GPUS` | Monthly |
+| New models | `src/data/constants.ts` → `MODELS` | As released |
+| Presets | `src/data/constants.ts` → `PRESETS` | As use cases emerge |
+| Footer date | `src/App.tsx` → `<footer>` | With pricing updates |
