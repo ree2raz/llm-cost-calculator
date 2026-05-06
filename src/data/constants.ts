@@ -17,6 +17,7 @@ export interface GPU {
   hbm_gbps: number;
   fp16_tflops: number;
   tp_capable: boolean;
+  generation: 'Ampere' | 'Ada' | 'Hopper' | 'Blackwell' | 'Unknown';
 }
 
 export interface ModelVariant {
@@ -64,6 +65,7 @@ export interface Preset {
 
 export const QUANTIZATIONS: QuantizationOption[] = [
   { key: 'fp16', label: 'FP16', bytes: 2 },
+  { key: 'fp8', label: 'FP8 (H100+/B200 native)', bytes: 1 },
   { key: 'q8', label: 'Q8', bytes: 1 },
   { key: 'q4_k_m', label: 'Q4_K_M', bytes: 0.5 },
   { key: 'awq4', label: 'AWQ 4-bit', bytes: 0.5 },
@@ -78,16 +80,17 @@ export const KV_DTYPES: KVDtype[] = [
 ];
 
 export const GPUS: GPU[] = [
-  { name: 'RTX 3090', vram: 24, hourly: 0.49, hbm_gbps: 936, fp16_tflops: 71, tp_capable: false },
-  { name: 'RTX 4090', vram: 24, hourly: 0.59, hbm_gbps: 1008, fp16_tflops: 165, tp_capable: false },
-  { name: 'RTX 5090', vram: 32, hourly: 1.58, hbm_gbps: 1792, fp16_tflops: 419, tp_capable: false },
-  { name: 'L4', vram: 24, hourly: 0.49, hbm_gbps: 300, fp16_tflops: 31, tp_capable: false },
-  { name: 'A10G', vram: 24, hourly: 1.10, hbm_gbps: 600, fp16_tflops: 125, tp_capable: false },
-  { name: 'L40S', vram: 48, hourly: 1.34, hbm_gbps: 864, fp16_tflops: 362, tp_capable: true },
-  { name: 'A100 40GB', vram: 40, hourly: 1.10, hbm_gbps: 1555, fp16_tflops: 312, tp_capable: true },
-  { name: 'A100 80GB', vram: 80, hourly: 2.31, hbm_gbps: 1935, fp16_tflops: 312, tp_capable: true },
-  { name: 'H100 80GB', vram: 80, hourly: 3.39, hbm_gbps: 3350, fp16_tflops: 989, tp_capable: true },
-  { name: 'H200 141GB', vram: 141, hourly: 4.31, hbm_gbps: 4800, fp16_tflops: 989, tp_capable: true },
+  { name: 'RTX 3090', vram: 24, hourly: 0.49, hbm_gbps: 936, fp16_tflops: 71, tp_capable: false, generation: 'Ampere' },
+  { name: 'RTX 4090', vram: 24, hourly: 0.59, hbm_gbps: 1008, fp16_tflops: 165, tp_capable: false, generation: 'Ada' },
+  { name: 'RTX 5090', vram: 32, hourly: 1.58, hbm_gbps: 1792, fp16_tflops: 419, tp_capable: false, generation: 'Blackwell' },
+  { name: 'L4', vram: 24, hourly: 0.49, hbm_gbps: 300, fp16_tflops: 31, tp_capable: false, generation: 'Ada' },
+  { name: 'A10G', vram: 24, hourly: 1.10, hbm_gbps: 600, fp16_tflops: 125, tp_capable: false, generation: 'Ampere' },
+  { name: 'L40S', vram: 48, hourly: 1.34, hbm_gbps: 864, fp16_tflops: 362, tp_capable: true, generation: 'Ada' },
+  { name: 'A100 40GB', vram: 40, hourly: 1.10, hbm_gbps: 1555, fp16_tflops: 312, tp_capable: true, generation: 'Ampere' },
+  { name: 'A100 80GB', vram: 80, hourly: 2.31, hbm_gbps: 1935, fp16_tflops: 312, tp_capable: true, generation: 'Ampere' },
+  { name: 'H100 80GB', vram: 80, hourly: 3.39, hbm_gbps: 3350, fp16_tflops: 989, tp_capable: true, generation: 'Hopper' },
+  { name: 'H200 141GB', vram: 141, hourly: 4.31, hbm_gbps: 4800, fp16_tflops: 989, tp_capable: true, generation: 'Hopper' },
+  { name: 'B200', vram: 192, hourly: 6.50, hbm_gbps: 8000, fp16_tflops: 2250, tp_capable: true, generation: 'Blackwell' },
 ];
 
 export const MODELS: Record<string, ModelFamily> = {

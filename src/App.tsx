@@ -4,7 +4,7 @@ import type { ModelVariant, Preset } from './data/constants';
 import {
   calculateVRAM, calculateKVPerToken, calculateThroughput,
   recommendGPU, calculateCosts, generateBreakEvenData,
-  findBreakEven, estimateArchitecture,
+  findBreakEven, estimateArchitecture, getConfidence,
 } from './lib/calculations';
 import Slider from './components/Slider';
 import BreakEvenChart from './components/BreakEvenChart';
@@ -23,6 +23,7 @@ export default function App() {
   // State
   const [family, setFamily] = useState('qwen3');
   const [variant, setVariant] = useState('Qwen3-14B');
+  const [awqKernel, setAwqKernel] = useState<'marlin' | 'default'>('marlin');
   const [quantization, setQuantization] = useState('q4_k_m');
   const [kvDtype, setKvDtype] = useState('fp16');
   const [contextLength, setContextLength] = useState(8192);
@@ -255,6 +256,17 @@ export default function App() {
                 </select>
               </div>
 
+              {quantization === 'awq4' && gpuRec.gpu.generation !== 'Ada' && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>AWQ Kernel</label>
+                  <select value={awqKernel} onChange={e => setAwqKernel(e.target.value as 'marlin' | 'default')} className="gruv-input">
+                    <option value="marlin">Marlin (24-26% of theoretical on Ampere)</option>
+                    <option value="default">Default AWQ (9-16% of theoretical)</option>
+                  </select>
+                  <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Marlin is 48-64% faster on Ampere GPUs.</div>
+                </div>
+              )}
+
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>KV Cache Precision</label>
                 <select value={kvDtype} onChange={e => setKvDtype(e.target.value)} className="gruv-input">
@@ -444,8 +456,7 @@ export default function App() {
                 </div>
               )}
               <div className="text-xs mb-4" style={{ color: 'var(--fg-muted)', lineHeight: '1.5' }}>
-                Benchmark-validated decode estimates — <a href="https://llm-bench.rituraj.info" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>measured on L4 vLLM</a>. FP16: 68-80% of theoretical. AWQ: 27-51% (degrades with concurrency). Prefill uses MFU ({mfu}).
-              </div>
+                Decode efficiency calibrated from benchmarks — <a href="https://llm-bench.rituraj.info" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>measured on L4 + A100</a> using vLLM 0.8.5. Per-GPU generation × quantization × batch lookup. Prefill uses MFU ({mfu}). <span className="ml-1 px-1.5 py-0.5 rounded text-xs font-semibold" style={{ backgroundColor: gpuRec.gpu.generation === 'Ada' || gpuRec.gpu.generation === 'Ampere' ? 'var(--accent-success)' : 'var(--accent-warning)', color: 'var(--bg-primary)' }}>{gpuRec.gpu.generation === 'Ada' || gpuRec.gpu.generation === 'Ampere' ? 'measured' : 'unmeasured'}</span>              </div>
 
               {gpuRec.count > gpuRec.replicas && (
                 <div className="text-xs p-3 rounded-lg mb-4" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--accent-danger)' }}>

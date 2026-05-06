@@ -76,6 +76,85 @@ export interface ThroughputResult {
   bytesReadPerStep: number;
 }
 
+// ─── Efficiency Lookup Table ───────────────────────────────────────────────
+// Per-GPU-generation, per-quantization, per-batch efficiency factors.
+// Measured on L4 (Ada) and A100 40GB (Ampere) using vLLM v0.8.5.
+// FP16: Qwen2.5-7B-Instruct, AWQ: Qwen2.5-7B-Instruct-AWQ.
+// Hopper/Blackwell entries extrapolated from Ampere — unmeasured.
+// Interpolation: piecewise linear between measured batch sizes.
+
+type BatchEfficiency = Record<number, number>;
+type Confidence = 'measured' | 'interpolated' | 'unmeasured';
+
+const EFFICIENCY: Record<string, Record<string, { data: BatchEfficiency; confidence: Confidence; note?: string }>> = {
+  Ada: {
+    fp16:     { data: { 1: 0.798, 4: 0.774, 16: 0.747, 32: 0.682, 64: 0.623 }, confidence: 'measured' },
+    awq_default: { data: { 1: 0.555, 4: 0.527, 16: 0.452, 32: 0.319, 64: 0.216 }, confidence: 'measured' },
+    awq_marlin:  { data: {}, confidence: 'unmeasured', note: 'Marlin requires Ampere+.' },
+  },
+  Ampere: {
+    fp16:     { data: { 1: 0.650, 16: 0.539, 64: 0.371 }, confidence: 'measured' },
+    awq_default: { data: { 1: 0.157, 16: 0.129, 64: 0.086 }, confidence: 'measured' },
+    awq_marlin:  { data: { 1: 0.258, 16: 0.258, 64: 0.127 }, confidence: 'measured' },
+  },
+  Hopper: {
+    fp16:     { data: { 1: 0.650, 16: 0.539, 64: 0.371 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere.' },
+    awq_default: { data: { 1: 0.157, 16: 0.129, 64: 0.086 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere. Use Marlin kernel.' },
+    awq_marlin:  { data: { 1: 0.258, 16: 0.258, 64: 0.127 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere.' },
+  },
+  Blackwell: {
+    fp16:     { data: { 1: 0.650, 16: 0.539, 64: 0.371 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere.' },
+    awq_default: { data: { 1: 0.157, 16: 0.129, 64: 0.086 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere. Use Marlin kernel.' },
+    awq_marlin:  { data: { 1: 0.258, 16: 0.258, 64: 0.127 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere.' },
+  },
+};
+
+function getDecodeEfficiency(
+  generation: GPU['generation'],
+  quantBytes: number,
+  batchSize: number,
+  awqKernel: 'marlin' | 'default' = 'marlin',
+): number {
+  const isAWQ = quantBytes >= 0.4 && quantBytes <= 1.0;
+  const quantBucket = quantBytes >= 2 ? 'fp16' :
+    (isAWQ ? `awq_${awqKernel}` : (quantBytes >= 0.4 ? 'q4' : 'q2'));
+
+  const genData = EFFICIENCY[generation] || EFFICIENCY['Ampere'];
+  let entry = genData[quantBucket]
+    || (quantBucket.startsWith('awq_') ? genData['awq_default'] || genData['fp16'] : genData['fp16']);
+  if (!entry) { entry = genData['fp16']; }
+
+  const { data } = entry;
+  const batches = Object.keys(data).map(Number).sort((a: number, b: number) => a - b);
+  if (batches.length === 0) { return 0.50; }
+
+  const bs = Math.max(1, Math.min(64, batchSize));
+  if (data[bs] !== undefined) { return data[bs]; }
+
+  // Piecewise linear interpolation between nearest measured points
+  let lo = batches[0]; let hi = batches[batches.length - 1];
+  for (let i = 0; i < batches.length - 1; i++) {
+    if (batches[i] <= bs && batches[i + 1] >= bs) { lo = batches[i]; hi = batches[i + 1]; break; }
+  }
+  if (bs <= lo) { return data[lo]; }
+  if (bs >= hi) { return data[hi]; }
+  const t = (bs - lo) / (hi - lo);
+  return data[lo] + t * (data[hi] - data[lo]);
+}
+
+export function getConfidence(
+  generation: GPU['generation'],
+  quantBytes: number,
+  awqKernel: 'marlin' | 'default' = 'marlin',
+): Confidence {
+  const isAWQ = quantBytes >= 0.4 && quantBytes <= 1.0;
+  const quantBucket = quantBytes >= 2 ? 'fp16' : (isAWQ ? `awq_${awqKernel}` : 'q4');
+  const genData = EFFICIENCY[generation];
+  if (!genData) { return 'unmeasured'; }
+  const entry = genData[quantBucket] || genData['fp16'];
+  return entry?.confidence || 'unmeasured';
+}
+
 export function calculateThroughput(
   model: ModelVariant,
   gpu: GPU,
@@ -84,21 +163,16 @@ export function calculateThroughput(
   avgContext: number,
   batchSize: number,
   mfu: number,
-  quantizationKey: string
+  quantizationKey: string,
+  awqKernel: 'marlin' | 'default' = 'marlin',
 ): ThroughputResult {
   const activeParams = model.active_params || model.params;
 
   // Prefill: compute-bound. Quantization does NOT affect prefill
   const prefillTps = mfu * gpu.fp16_tflops * 1e12 / (2 * activeParams * 1e9);
 
-  // Decode: memory-bandwidth-bound. Apply benchmark-validated efficiency factor.
-  // Measured on L4 vLLM: FP16 achieves 68-80% of theoretical, AWQ 27-51%.
-  // Efficiency degrades with concurrency — weights dominate at low batch, KV cache at high batch.
-  // Linear interpolation between c=1 and c=64 endpoints. After A100 run, refit with multi-GPU data.
-  const batchSizeClamped = Math.max(1, Math.min(64, batchSize));
-  const effBase = quantBytes >= 2 ? 0.80 : quantBytes >= 1.5 ? 0.74 : quantBytes >= 1 ? 0.68 : quantBytes >= 0.4 ? 0.51 : 0.40;
-  const effSlope = quantBytes >= 2 ? 0.00191 : quantBytes >= 1.5 ? 0.00180 : quantBytes >= 1 ? 0.00170 : quantBytes >= 0.4 ? 0.00381 : 0.00300;
-  const decodeEfficiency = Math.max(0.10, effBase - (batchSizeClamped - 1) * effSlope);
+  // Decode: memory-bandwidth-bound. Efficiency from per-GPU lookup table.
+  const decodeEfficiency = getDecodeEfficiency(gpu.generation, quantBytes, batchSize, awqKernel);
   const weightsBytes = activeParams * 1e9 * quantBytes;
   const kvPerSeqBytes = kvBytesPerToken * avgContext;
   const bytesReadPerStep = weightsBytes + batchSize * kvPerSeqBytes;
@@ -161,7 +235,7 @@ export function recommendGPU(
   let bestCost = Infinity;
 
   for (const gpu of GPUS) {
-    const tp = calculateThroughput(model, gpu, q.bytes, kvBytesPerToken, avgContext, batchSize, mfu, q.key);
+    const tp = calculateThroughput(model, gpu, q.bytes, kvBytesPerToken, avgContext, batchSize, mfu, q.key, 'marlin');
     const gpusForPrefill = Math.max(1, Math.ceil(inputTpsRequired / tp.prefillTps));
     const gpusForDecode = Math.max(1, Math.ceil(outputTpsRequired / tp.decodeTpsAggregate));
     const gpusThroughput = Math.max(gpusForPrefill, gpusForDecode);
