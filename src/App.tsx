@@ -443,6 +443,9 @@ export default function App() {
                   </div>
                 </div>
               )}
+              <div className="text-xs mb-4" style={{ color: 'var(--fg-muted)', lineHeight: '1.5' }}>
+                Theoretical estimates. Real serving engines achieve 64-80% of theoretical decode throughput for FP16 and ~51% for 4-bit quantization (<a href="https://llm-bench.rituraj.info" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>benchmarked</a>). Multiply by your expected utilization.
+              </div>
 
               {gpuRec.count > gpuRec.replicas && (
                 <div className="text-xs p-3 rounded-lg mb-4" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--accent-danger)' }}>

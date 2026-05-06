@@ -280,8 +280,10 @@ export function generateBreakEvenData(
   const util = Math.max(0.2, Math.min(1, gpuUtilization / 100));
 
   const blendedPrice = (apiPricing.input * cacheMult * (inputRatio / 100) + apiPricing.output * ((100 - inputRatio) / 100)) * batchMult;
+  const baseVramData = calculateVRAM(model, quantization, kvDtype, contextLength, concurrentRequests);
+  const baseGpuRec = recommendGPU(baseVramData, model, quantization, kvDtype, avgTokens, inputRatio, 100, concurrentRequests, peakFactor, replicas, mfu);
   const exactBreakEven = blendedPrice > 0
-    ? (GPUS[0].hourly * 730 / util) / ((avgTokens * 30 / 1e6) * blendedPrice)
+    ? (baseGpuRec.count * baseGpuRec.gpu.hourly * 730 * tierMult / util) / ((avgTokens * 30 / 1e6) * blendedPrice)
     : 1000;
 
   const maxVolume = Math.max(5000, Math.ceil(exactBreakEven * 3));

@@ -91,6 +91,12 @@ export const GPUS: GPU[] = [
 ];
 
 export const MODELS: Record<string, ModelFamily> = {
+  'qwen25': {
+    family: 'Qwen2.5 (Alibaba)',
+    variants: [
+      { name: 'Qwen2.5-7B', params: 7, layers: 28, hidden: 4096, heads: 28, kv_heads: 4, context: 131072, arch: 'gqa' },
+    ]
+  },
   'qwen3': {
     family: 'Qwen3 (Alibaba)',
     variants: [

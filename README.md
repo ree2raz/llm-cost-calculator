@@ -103,6 +103,10 @@ See `CONTEXT.md` for design rationale and update procedures. Key files:
 | Presets | `src/data/constants.ts` → `PRESETS` | As use cases emerge |
 | Footer date | `src/App.tsx` → `<footer>` | With pricing updates |
 
+## See Also
+
+- **[Inference Bench](https://github.com/ree2raz/inference-bench)** — Reproducible LLM serving benchmarks (vLLM, SGLang, llama.cpp on L4 GPU). Validates this calculator's throughput predictions: FP16 achieves 64-80% of theoretical, AWQ achieves ~51%.
+
 ## License
 
 MIT License. See [LICENSE](https://github.com/ree2raz/llm-cost-calculator/blob/main/LICENSE).
