@@ -83,18 +83,26 @@ export function calculateThroughput(
   kvBytesPerToken: number,
   avgContext: number,
   batchSize: number,
-  mfu: number
+  mfu: number,
+  quantizationKey: string
 ): ThroughputResult {
   const activeParams = model.active_params || model.params;
 
   // Prefill: compute-bound. Quantization does NOT affect prefill
   const prefillTps = mfu * gpu.fp16_tflops * 1e12 / (2 * activeParams * 1e9);
 
-  // Decode: memory-bandwidth-bound. Quantization DOES affect decode
+  // Decode: memory-bandwidth-bound. Apply benchmark-validated efficiency factor.
+  // Measured on L4 vLLM: FP16 achieves 68-80% of theoretical, AWQ 27-51%.
+  // Efficiency degrades with concurrency — weights dominate at low batch, KV cache at high batch.
+  // Linear interpolation between c=1 and c=64 endpoints. After A100 run, refit with multi-GPU data.
+  const batchSizeClamped = Math.max(1, Math.min(64, batchSize));
+  const effBase = quantBytes >= 2 ? 0.80 : quantBytes >= 1.5 ? 0.74 : quantBytes >= 1 ? 0.68 : quantBytes >= 0.4 ? 0.51 : 0.40;
+  const effSlope = quantBytes >= 2 ? 0.00191 : quantBytes >= 1.5 ? 0.00180 : quantBytes >= 1 ? 0.00170 : quantBytes >= 0.4 ? 0.00381 : 0.00300;
+  const decodeEfficiency = Math.max(0.10, effBase - (batchSizeClamped - 1) * effSlope);
   const weightsBytes = activeParams * 1e9 * quantBytes;
   const kvPerSeqBytes = kvBytesPerToken * avgContext;
   const bytesReadPerStep = weightsBytes + batchSize * kvPerSeqBytes;
-  const decodeTpsAggregate = batchSize * gpu.hbm_gbps * 1e9 / bytesReadPerStep;
+  const decodeTpsAggregate = batchSize * gpu.hbm_gbps * 1e9 / bytesReadPerStep * decodeEfficiency;
   const decodeTpsPerStream = decodeTpsAggregate / batchSize;
 
   return {
@@ -153,7 +161,7 @@ export function recommendGPU(
   let bestCost = Infinity;
 
   for (const gpu of GPUS) {
-    const tp = calculateThroughput(model, gpu, q.bytes, kvBytesPerToken, avgContext, batchSize, mfu);
+    const tp = calculateThroughput(model, gpu, q.bytes, kvBytesPerToken, avgContext, batchSize, mfu, q.key);
     const gpusForPrefill = Math.max(1, Math.ceil(inputTpsRequired / tp.prefillTps));
     const gpusForDecode = Math.max(1, Math.ceil(outputTpsRequired / tp.decodeTpsAggregate));
     const gpusThroughput = Math.max(gpusForPrefill, gpusForDecode);

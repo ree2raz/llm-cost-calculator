@@ -444,7 +444,7 @@ export default function App() {
                 </div>
               )}
               <div className="text-xs mb-4" style={{ color: 'var(--fg-muted)', lineHeight: '1.5' }}>
-                Theoretical estimates. Real serving engines achieve 64-80% of theoretical decode throughput for FP16 and ~51% for 4-bit quantization (<a href="https://llm-bench.rituraj.info" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>benchmarked</a>). Multiply by your expected utilization.
+                Benchmark-validated decode estimates — <a href="https://llm-bench.rituraj.info" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>measured on L4 vLLM</a>. FP16: 68-80% of theoretical. AWQ: 27-51% (degrades with concurrency). Prefill uses MFU ({mfu}).
               </div>
 
               {gpuRec.count > gpuRec.replicas && (
