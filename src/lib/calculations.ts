@@ -96,16 +96,22 @@ const EFFICIENCY: Record<string, Record<string, { data: BatchEfficiency; confide
     fp16:     { data: { 1: 0.650, 16: 0.539, 64: 0.371 }, confidence: 'measured' },
     awq_default: { data: { 1: 0.157, 16: 0.129, 64: 0.086 }, confidence: 'measured' },
     awq_marlin:  { data: { 1: 0.258, 16: 0.258, 64: 0.127 }, confidence: 'measured' },
+    moe_fp16:     { data: { 1: 0.457, 4: 0.259 }, confidence: 'measured', note: 'Qwen3-30B-A3B on A100 80GB. 3.3B active params, 128 experts (8/token).' },
+    moe_awq_marlin: { data: { 1: 0.176, 4: 0.143, 16: 0.113 }, confidence: 'measured', note: 'Qwen3-30B-A3B-AWQ on A100 40GB. 128 experts, 8 active/token.' },
   },
   Hopper: {
     fp16:     { data: { 1: 0.650, 16: 0.539, 64: 0.371 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere.' },
     awq_default: { data: { 1: 0.157, 16: 0.129, 64: 0.086 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere. Use Marlin kernel.' },
     awq_marlin:  { data: { 1: 0.258, 16: 0.258, 64: 0.127 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere.' },
+    moe_fp16:     { data: { 1: 0.457, 4: 0.259 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere (A100 80GB).' },
+    moe_awq_marlin: { data: { 1: 0.176, 4: 0.143, 16: 0.113 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere (A100 40GB).' },
   },
   Blackwell: {
     fp16:     { data: { 1: 0.650, 16: 0.539, 64: 0.371 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere.' },
     awq_default: { data: { 1: 0.157, 16: 0.129, 64: 0.086 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere. Use Marlin kernel.' },
     awq_marlin:  { data: { 1: 0.258, 16: 0.258, 64: 0.127 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere.' },
+    moe_fp16:     { data: { 1: 0.457, 4: 0.259 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere (A100 80GB).' },
+    moe_awq_marlin: { data: { 1: 0.176, 4: 0.143, 16: 0.113 }, confidence: 'unmeasured', note: 'Extrapolated from Ampere (A100 40GB).' },
   },
 };
 
@@ -114,10 +120,16 @@ function getDecodeEfficiency(
   quantBytes: number,
   batchSize: number,
   awqKernel: 'marlin' | 'default' = 'marlin',
+  isMoE: boolean = false,
 ): number {
   const isAWQ = quantBytes >= 0.4 && quantBytes <= 1.0;
-  const quantBucket = quantBytes >= 2 ? 'fp16' :
-    (isAWQ ? `awq_${awqKernel}` : (quantBytes >= 0.4 ? 'q4' : 'q2'));
+  let quantBucket: string;
+  if (isMoE) {
+    quantBucket = quantBytes >= 2 ? 'moe_fp16' : 'moe_awq_marlin';
+  } else {
+    quantBucket = quantBytes >= 2 ? 'fp16' :
+      (isAWQ ? `awq_${awqKernel}` : (quantBytes >= 0.4 ? 'q4' : 'q2'));
+  }
 
   const genData = EFFICIENCY[generation] || EFFICIENCY['Ampere'];
   let entry = genData[quantBucket]
@@ -146,9 +158,15 @@ export function getConfidence(
   generation: GPU['generation'],
   quantBytes: number,
   awqKernel: 'marlin' | 'default' = 'marlin',
+  isMoE: boolean = false,
 ): Confidence {
   const isAWQ = quantBytes >= 0.4 && quantBytes <= 1.0;
-  const quantBucket = quantBytes >= 2 ? 'fp16' : (isAWQ ? `awq_${awqKernel}` : 'q4');
+  let quantBucket: string;
+  if (isMoE) {
+    quantBucket = quantBytes >= 2 ? 'moe_fp16' : 'moe_awq_marlin';
+  } else {
+    quantBucket = quantBytes >= 2 ? 'fp16' : (isAWQ ? `awq_${awqKernel}` : 'q4');
+  }
   const genData = EFFICIENCY[generation];
   if (!genData) { return 'unmeasured'; }
   const entry = genData[quantBucket] || genData['fp16'];
@@ -172,7 +190,8 @@ export function calculateThroughput(
   const prefillTps = mfu * gpu.fp16_tflops * 1e12 / (2 * activeParams * 1e9);
 
   // Decode: memory-bandwidth-bound. Efficiency from per-GPU lookup table.
-  const decodeEfficiency = getDecodeEfficiency(gpu.generation, quantBytes, batchSize, awqKernel);
+  const isMoE = model.arch === 'moe';
+  const decodeEfficiency = getDecodeEfficiency(gpu.generation, quantBytes, batchSize, awqKernel, isMoE);
   const weightsBytes = activeParams * 1e9 * quantBytes;
   const kvPerSeqBytes = kvBytesPerToken * avgContext;
   const bytesReadPerStep = weightsBytes + batchSize * kvPerSeqBytes;

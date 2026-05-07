@@ -109,7 +109,7 @@ export const MODELS: Record<string, ModelFamily> = {
       { name: 'Qwen3-8B', params: 8, layers: 36, hidden: 4096, heads: 32, kv_heads: 8, context: 131072, arch: 'gqa' },
       { name: 'Qwen3-14B', params: 14, layers: 40, hidden: 5120, heads: 40, kv_heads: 8, context: 131072, arch: 'gqa' },
       { name: 'Qwen3-32B', params: 32, layers: 64, hidden: 5120, heads: 40, kv_heads: 8, context: 131072, arch: 'gqa' },
-      { name: 'Qwen3-235B (MoE)', params: 235, active_params: 32, layers: 64, hidden: 8192, heads: 64, kv_heads: 8, context: 131072, arch: 'moe', moe_topk: 8 },
+      { name: 'Qwen3-30B-A3B (MoE)', params: 30.5, active_params: 3.3, layers: 48, hidden: 2048, heads: 32, kv_heads: 4, context: 32768, arch: 'moe', moe_topk: 8 },
     ]
   },
   'qwen35': {
