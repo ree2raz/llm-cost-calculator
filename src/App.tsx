@@ -566,6 +566,11 @@ export default function App() {
               className="underline hover:no-underline transition-colors" style={{ color: 'var(--accent-primary)' }}>
               GitHub repo
             </a>
+            <span style={{ color: 'var(--border)' }}>|</span>
+            <a href="https://github.com/ree2raz/inference-bench" target="_blank" rel="noopener noreferrer"
+              className="underline hover:no-underline transition-colors" style={{ color: 'var(--accent-primary)' }}>
+              Benchmark data
+            </a>
           </p>
         </footer>
       </main>
