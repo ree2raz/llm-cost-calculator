@@ -62,6 +62,27 @@ export default function App() {
   useEffect(() => {
     try {
       const p = new URLSearchParams(window.location.search);
+      const presetSlug = p.get('preset')?.toLowerCase();
+      if (presetSlug) {
+        const preset = PRESETS.find(pr =>
+          pr.name.toLowerCase().replace(/\s+/g, '-').startsWith(presetSlug)
+        );
+        if (preset) {
+          setFamily(preset.family);
+          setVariant(preset.variant);
+          setQuantization(preset.quantization);
+          setContextLength(preset.contextLength);
+          setConcurrent(preset.concurrent);
+          setDailyVolume(preset.dailyVolume);
+          setAvgTokens(preset.avgTokens);
+          setInputRatio(preset.inputRatio);
+          setPeakFactor(preset.peakFactor);
+          setReplicaCount(preset.replicaCount);
+          setPricingTier(preset.pricingTier);
+          setMfu(preset.mfu);
+          return;
+        }
+      }
       if (p.has('family')) setFamily(p.get('family')!);
       if (p.has('variant')) setVariant(p.get('variant')!);
       if (p.has('quantization')) setQuantization(p.get('quantization')!);
