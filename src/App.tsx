@@ -455,11 +455,17 @@ export default function App() {
                 <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
                   <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--chart-self)' }}>Self-hosted</div>
                   <div className="text-xl font-bold font-mono" style={{ color: 'var(--text-primary)' }}>${costs.selfHostedMonthly.toFixed(0)}<span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>/mo</span></div>
+                  <div className="text-xs mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }} title="Range from GPU pricing variance (±15%), continuous batching overhead (10–30%), and realized MFU vs theoretical">
+                    range ${costs.selfHostedMonthlyLow.toFixed(0)}–${costs.selfHostedMonthlyHigh.toFixed(0)}
+                  </div>
                   <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>${costs.selfHostedPerTranscript.toFixed(4)}/request {costs.storageCost > 1 ? `· ${costs.storageCost.toFixed(1)} GB artifact storage` : ''}</div>
                 </div>
                 <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
                   <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--chart-api)' }}>API ({costs.apiPricing.provider})</div>
                   <div className="text-xl font-bold font-mono" style={{ color: 'var(--text-primary)' }}>${costs.apiMonthly.toFixed(0)}<span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>/mo</span></div>
+                  <div className="text-xs mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }} title="Range from token-count estimation, cache hit-rate drift, and batch eligibility variance">
+                    range ${costs.apiMonthlyLow.toFixed(0)}–${costs.apiMonthlyHigh.toFixed(0)}
+                  </div>
                   <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
                     ${costs.apiPerTranscript.toFixed(4)}/request
                     {(cacheHitRatio > 0 || batchEnabled) && <span> · {cacheHitRatio > 0 && `${Math.round((1 - costs.cacheMult) * 100)}% cache`}{cacheHitRatio > 0 && batchEnabled && ' + '}{batchEnabled && 'batch 50%'}</span>}

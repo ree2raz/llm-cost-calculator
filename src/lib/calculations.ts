@@ -291,7 +291,11 @@ export function recommendGPU(
 
 export interface CostResult {
   selfHostedMonthly: number;
+  selfHostedMonthlyLow: number;
+  selfHostedMonthlyHigh: number;
   apiMonthly: number;
+  apiMonthlyLow: number;
+  apiMonthlyHigh: number;
   selfHostedPerTranscript: number;
   apiPerTranscript: number;
   winner: 'self' | 'api';
@@ -303,6 +307,17 @@ export interface CostResult {
   storageCost: number;
   gpuUtilization: number;
 }
+
+// Uncertainty bands. Self-hosted is wider and asymmetric:
+// downside is bounded (-15%) by spot pricing and ideal batching;
+// upside is open-ended (+30%) from scheduler overhead, GPU price spikes,
+// and lower realized MFU vs. theoretical. API is tighter (±15%) since
+// pricing is fixed per provider — variance comes from token-count estimation,
+// cache hit-rate drift, and batch-discount eligibility.
+export const SELF_HOSTED_LOW_FACTOR = 0.85;
+export const SELF_HOSTED_HIGH_FACTOR = 1.30;
+export const API_LOW_FACTOR = 0.85;
+export const API_HIGH_FACTOR = 1.15;
 
 export function calculateCosts(
   dailyVolume: number,
@@ -342,7 +357,13 @@ export function calculateCosts(
   const apiPerTranscript = apiMonthly / monthlyCalls;
 
   return {
-    selfHostedMonthly, apiMonthly, selfHostedPerTranscript, apiPerTranscript,
+    selfHostedMonthly,
+    selfHostedMonthlyLow: selfHostedMonthly * SELF_HOSTED_LOW_FACTOR,
+    selfHostedMonthlyHigh: selfHostedMonthly * SELF_HOSTED_HIGH_FACTOR,
+    apiMonthly,
+    apiMonthlyLow: apiMonthly * API_LOW_FACTOR,
+    apiMonthlyHigh: apiMonthly * API_HIGH_FACTOR,
+    selfHostedPerTranscript, apiPerTranscript,
     winner: selfHostedMonthly < apiMonthly ? 'self' : 'api',
     savings: Math.abs(selfHostedMonthly - apiMonthly),
     savingsPercent: Math.abs(selfHostedMonthly - apiMonthly) / Math.max(selfHostedMonthly, apiMonthly) * 100,
