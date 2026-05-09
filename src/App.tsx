@@ -577,8 +577,8 @@ export default function App() {
         {/* Footer */}
         <footer className="mt-12 pt-6 text-center text-xs" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
           <p>
-            All prices in USD. GPU costs assume 730 hrs/mo — RunPod &amp; Lambda pricing, April 2026.
-            API pricing from OpenRouter as of April 2026.
+            All prices in USD. GPU costs assume 730 hrs/mo — RunPod &amp; Lambda pricing, May 2026.
+            API pricing from OpenRouter as of May 2026.
           </p>
           <p className="mt-2 flex items-center justify-center gap-4">
             <a href="https://www.rituraj.info/posts/on-prem-llm-deployment-cto/" target="_blank" rel="noopener noreferrer"
