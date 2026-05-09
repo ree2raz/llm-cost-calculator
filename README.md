@@ -1,6 +1,6 @@
 # LLM Deploy Cost Calculator
 
-**Production-grade GPU sizing, cost comparison, and break-even analysis for LLM deployment.**
+GPU sizing, cost comparison, and break-even analysis for self-hosted LLM inference.
 
 **[llm-cost.rituraj.info](https://llm-cost.rituraj.info)** · [Read the blog post](https://www.rituraj.info/posts/on-prem-llm-deployment-cto/)
 
@@ -10,16 +10,16 @@
 2. **What will it cost?** Self-hosted GPU rental vs API calls with pricing tiers (on-demand, reserved-1y, spot), HA replicas, peak factor, GPU utilization, and batch discounts.
 3. **When does self-hosted beat API?** Step-function break-even chart showing where GPU count jumps and the exact volume where self-hosting becomes cheaper.
 
-## Why This Calculator Exists
+## Four things I had to model carefully
 
-Most LLM cost calculators make four predictable mistakes:
+Building this, I kept getting estimates that felt off. Each of these caused the GPU count to jump when I got it wrong:
 
-1. **Active params for MoE memory.** DeepSeek V4 Pro has 49B active params and 1.6T total. A calculator using `active_params` for VRAM says 24 GB at Q4. The correct answer is 800 GB — a 32× gap.
-2. **Weight quantization bytes for KV cache.** On Qwen3-32B at 32K context with 4 concurrent requests, the KV cache in FP16 is 34 GB. The Q4 model weights are 16 GB. The cache is twice the model. Applying weight quantization to KV produces 8.5 GB instead of 34 GB.
-3. **No throughput model.** Fitting in VRAM is necessary but not sufficient. Prefill is compute-bound. Decode is bandwidth-bound. GPU count = `max(gpus_for_prefill, gpus_for_decode, gpus_for_vram)`.
-4. **No replica multiplier.** Two RTX 3090s at reserved pricing is $547/month, not the $274/month a single-GPU calculator quotes. The GPU bill doubles the moment you take HA seriously.
+1. **Total params, not active, for MoE memory.** DeepSeek V4 Pro has 49B active params and 1.6T total. Using active params for VRAM says 24 GB at Q4. The correct answer is 800 GB — a 32× gap.
+2. **KV cache precision is independent of weight quantization.** On Qwen3-32B at 32K context with 4 concurrent requests, the KV cache in FP16 is 34 GB. The Q4 model weights are 16 GB. The cache is twice the model. Applying weight quantization to KV produces 8.5 GB instead of 34 GB.
+3. **Fitting in VRAM is necessary but not sufficient.** Prefill is compute-bound. Decode is bandwidth-bound. GPU count = `max(gpus_for_prefill, gpus_for_decode, gpus_for_vram)`.
+4. **One GPU has no redundancy.** Two RTX 3090s at reserved pricing is $547/month, not the $274/month a single-GPU estimate gives you. The bill doubles the moment you take HA seriously.
 
-These four mistakes compound. A naive calculator says Qwen3-32B at 64K context with 8 concurrent requests needs one GPU. The correct answer is 166 GB of VRAM — six A100 80GB GPUs at $7,700/month for a replicated deployment. The naive figure is off by 5× in GPU count and 4× in cost. This calculator computes the correct answer.
+These compound. Qwen3-32B with avg 12K sessions, 64K context window, 8 concurrent, 2 replicas: naive estimate says one mid-range GPU. The correct answer is ~45 GB per replica (16 GB weights + 23 GB KV) — two A100 80GBs at ~$4,000/month on-demand. And that is before throughput requirements or peak factor. The calculator shows the exact breakdown and the formulas that produced it.
 
 ## Features
 
@@ -39,8 +39,8 @@ These four mistakes compound. A naive calculator says Qwen3-32B at 64K context w
 | Preset | Model | Context | Price Tier | Self-hosted | API | API wins by |
 |--------|-------|---------|-----------|-------------|-----|-------------|
 | Customer Support Bot | Qwen3-14B Q4 | 8K | Reserved 1y | $547/mo (2× RTX 3090) | $107/mo (GPT-4o) | 80% |
-| Code Assistant | Qwen3-32B Q4 | 32K | On-demand | $1,889/mo (2× A100 40GB) | $168/mo (GPT-4o) | 91% |
-| Enterprise RAG | Qwen3-32B Q4 | 64K | Reserved 1y | $7,700/mo (6× A100 80GB) | $360/mo (GPT-4o) | 95% |
+| Code Assistant | Qwen3-32B Q4 | 32K | On-demand | ~$950/mo (1× A100 40GB) | $168/mo (GPT-4o) | 82% |
+| Enterprise RAG | Qwen3-32B Q4 | 64K | On-demand | ~$4,000/mo (2× A100 80GB) | ~$1,440/mo (GPT-4o) | 64% |
 | Startup MVP | Gemma 3-27B Q4 | 16K | Spot | $331/mo (1× A100 40GB) | $17/mo (GPT-4o) | 95% |
 | High-Volume API Replacement | Qwen3-30B-A3B MoE Q4 | 8K | Reserved 1y | $1,200/mo (2× A100 40GB) | $3,000/mo (GPT-4o) | **self-host wins 60%** |
 
