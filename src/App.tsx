@@ -596,6 +596,12 @@ export default function App() {
               Benchmark data
             </a>
           </p>
+          <p className="mt-2">
+            Feedback or bugs? <a href="https://www.linkedin.com/in/ree2raz/" target="_blank" rel="noopener noreferrer"
+              className="underline hover:no-underline transition-colors" style={{ color: 'var(--accent-primary)' }}>LinkedIn DM</a>
+            {' '}or <a href="mailto:ree2raz@proton.me"
+              className="underline hover:no-underline transition-colors" style={{ color: 'var(--accent-primary)' }}>ree2raz@proton.me</a>
+          </p>
         </footer>
       </main>
     </div>
