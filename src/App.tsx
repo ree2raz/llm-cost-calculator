@@ -21,25 +21,26 @@ export default function App() {
   });
 
   // State
-  const [family, setFamily] = useState('qwen3');
-  const [variant, setVariant] = useState('Qwen3-14B');
+  const DEFAULT_PRESET = PRESETS[0]; // Customer Support Bot
+  const [family, setFamily] = useState(DEFAULT_PRESET.family);
+  const [variant, setVariant] = useState(DEFAULT_PRESET.variant);
   const [awqKernel, setAwqKernel] = useState<'marlin' | 'default'>('marlin');
-  const [quantization, setQuantization] = useState('q4_k_m');
+  const [quantization, setQuantization] = useState(DEFAULT_PRESET.quantization);
   const [kvDtype, setKvDtype] = useState('fp16');
-  const [contextLength, setContextLength] = useState(8192);
-  const [concurrent, setConcurrent] = useState(8);
-  const [dailyVolume, setDailyVolume] = useState(500);
-  const [avgTokens, setAvgTokens] = useState(1500);
-  const [inputRatio, setInputRatio] = useState(70);
+  const [contextLength, setContextLength] = useState(DEFAULT_PRESET.contextLength);
+  const [concurrent, setConcurrent] = useState(DEFAULT_PRESET.concurrent);
+  const [dailyVolume, setDailyVolume] = useState(DEFAULT_PRESET.dailyVolume);
+  const [avgTokens, setAvgTokens] = useState(DEFAULT_PRESET.avgTokens);
+  const [inputRatio, setInputRatio] = useState(DEFAULT_PRESET.inputRatio);
   const [customParams, setCustomParams] = useState(7);
   const [apiModel, setApiModel] = useState('GPT-4o');
   const [cacheHitRatio, setCacheHitRatio] = useState(0);
   const [gpuUtilization, setGpuUtilization] = useState(85);
   const [batchEnabled, setBatchEnabled] = useState(false);
-  const [replicaCount, setReplicaCount] = useState(2);
-  const [peakFactor, setPeakFactor] = useState(1.5);
-  const [pricingTier, setPricingTier] = useState('on_demand');
-  const [mfu, setMfu] = useState(0.35);
+  const [replicaCount, setReplicaCount] = useState(DEFAULT_PRESET.replicaCount);
+  const [peakFactor, setPeakFactor] = useState(DEFAULT_PRESET.peakFactor);
+  const [pricingTier, setPricingTier] = useState(DEFAULT_PRESET.pricingTier);
+  const [mfu, setMfu] = useState(DEFAULT_PRESET.mfu);
   const [resetKey, setResetKey] = useState(0);
 
   // Theme effect
