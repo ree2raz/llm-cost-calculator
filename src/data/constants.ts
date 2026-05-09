@@ -233,7 +233,7 @@ export const PRICING_TIERS: Record<string, number> = { on_demand: 1.0, reserved_
 export const PRESETS: Preset[] = [
   { name: 'Customer Support Bot', family: 'qwen3', variant: 'Qwen3-14B', quantization: 'q4_k_m', contextLength: 8192, concurrent: 8, dailyVolume: 500, avgTokens: 1500, inputRatio: 70, peakFactor: 3.0, replicaCount: 2, pricingTier: 'reserved_1y', mfu: 0.35 },
   { name: 'Code Assistant', family: 'qwen3', variant: 'Qwen3-32B', quantization: 'q4_k_m', contextLength: 32768, concurrent: 4, dailyVolume: 200, avgTokens: 4000, inputRatio: 40, peakFactor: 2.0, replicaCount: 1, pricingTier: 'on_demand', mfu: 0.35 },
-  { name: 'Enterprise RAG', family: 'deepseek', variant: 'DeepSeek V4 Pro', quantization: 'q4_k_m', contextLength: 65536, concurrent: 16, dailyVolume: 1000, avgTokens: 3000, inputRatio: 80, peakFactor: 2.5, replicaCount: 2, pricingTier: 'reserved_1y', mfu: 0.30 },
+  { name: 'Enterprise RAG', family: 'qwen3', variant: 'Qwen3-32B', quantization: 'q4_k_m', contextLength: 65536, concurrent: 8, dailyVolume: 1000, avgTokens: 3000, inputRatio: 80, peakFactor: 2.5, replicaCount: 2, pricingTier: 'reserved_1y', mfu: 0.30 },
   { name: 'Startup MVP', family: 'gemma3', variant: 'Gemma 3-27B', quantization: 'q4_k_m', contextLength: 16384, concurrent: 2, dailyVolume: 100, avgTokens: 1000, inputRatio: 60, peakFactor: 3.0, replicaCount: 1, pricingTier: 'spot', mfu: 0.35 },
-  { name: 'High-Volume API Replacement', family: 'deepseek', variant: 'DeepSeek V4 Flash', quantization: 'q4_k_m', contextLength: 8192, concurrent: 32, dailyVolume: 5000, avgTokens: 800, inputRatio: 50, peakFactor: 1.5, replicaCount: 2, pricingTier: 'reserved_1y', mfu: 0.40 },
+  { name: 'High-Volume API Replacement', family: 'qwen3', variant: 'Qwen3-30B-A3B (MoE)', quantization: 'q4_k_m', contextLength: 8192, concurrent: 32, dailyVolume: 5000, avgTokens: 800, inputRatio: 50, peakFactor: 1.5, replicaCount: 2, pricingTier: 'reserved_1y', mfu: 0.40 },
 ];
