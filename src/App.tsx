@@ -168,12 +168,13 @@ export default function App() {
   };
 
   const handleReset = () => {
-    setFamily('qwen3'); setVariant('Qwen3-14B'); setQuantization('q4_k_m');
-    setContextLength(8192); setConcurrent(8); setDailyVolume(500);
-    setAvgTokens(1500); setInputRatio(70); setCustomParams(7);
+    const p = DEFAULT_PRESET;
+    setFamily(p.family); setVariant(p.variant); setQuantization(p.quantization);
+    setContextLength(p.contextLength); setConcurrent(p.concurrent); setDailyVolume(p.dailyVolume);
+    setAvgTokens(p.avgTokens); setInputRatio(p.inputRatio); setCustomParams(7);
     setApiModel('GPT-4o'); setCacheHitRatio(0); setGpuUtilization(85);
-    setBatchEnabled(false); setKvDtype('fp16'); setReplicaCount(2);
-    setPeakFactor(1.5); setPricingTier('on_demand'); setMfu(0.35);
+    setBatchEnabled(false); setKvDtype('fp16'); setReplicaCount(p.replicaCount);
+    setPeakFactor(p.peakFactor); setPricingTier(p.pricingTier); setMfu(p.mfu);
     setResetKey(k => k + 1);
   };
 
