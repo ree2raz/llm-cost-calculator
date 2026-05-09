@@ -19,7 +19,7 @@ Most LLM cost calculators make four predictable mistakes:
 3. **No throughput model.** Fitting in VRAM is necessary but not sufficient. Prefill is compute-bound. Decode is bandwidth-bound. GPU count = `max(gpus_for_prefill, gpus_for_decode, gpus_for_vram)`.
 4. **No replica multiplier.** Two RTX 3090s at reserved pricing is $547/month, not the $274/month a single-GPU calculator quotes. The GPU bill doubles the moment you take HA seriously.
 
-These four mistakes compound. A naive calculator says DeepSeek V4 Pro Q4 needs one A100 at $522/month. The correct answer is eight A100s times two replicas at $9,825/month. This calculator computes the correct answer.
+These four mistakes compound. A naive calculator says Qwen3-32B at 64K context with 8 concurrent requests needs one GPU. The correct answer is 166 GB of VRAM — six A100 80GB GPUs at $7,700/month for a replicated deployment. The naive figure is off by 5× in GPU count and 4× in cost. This calculator computes the correct answer.
 
 ## Features
 
@@ -40,9 +40,9 @@ These four mistakes compound. A naive calculator says DeepSeek V4 Pro Q4 needs o
 |--------|-------|---------|-----------|-------------|-----|-------------|
 | Customer Support Bot | Qwen3-14B Q4 | 8K | Reserved 1y | $547/mo (2× RTX 3090) | $107/mo (GPT-4o) | 80% |
 | Code Assistant | Qwen3-32B Q4 | 32K | On-demand | $1,889/mo (2× A100 40GB) | $168/mo (GPT-4o) | 91% |
-| Enterprise RAG | DeepSeek V4 Pro Q4 | 64K | Reserved 1y | $9,825/mo (16× A100 40GB) | $360/mo (GPT-4o) | 96% |
+| Enterprise RAG | Qwen3-32B Q4 | 64K | Reserved 1y | $7,700/mo (6× A100 80GB) | $360/mo (GPT-4o) | 95% |
 | Startup MVP | Gemma 3-27B Q4 | 16K | Spot | $331/mo (1× A100 40GB) | $17/mo (GPT-4o) | 95% |
-| High-Volume API Replacement | DeepSeek V4 Flash Q4 | 8K | Reserved 1y | $7,369/mo (12× A100 40GB) | $750/mo (GPT-4o) | 90% |
+| High-Volume API Replacement | Qwen3-30B-A3B MoE Q4 | 8K | Reserved 1y | $1,200/mo (2× A100 40GB) | $750/mo (GPT-4o) | 38% |
 
 All prices April 2026. GPU costs from RunPod and Lambda; API costs from OpenRouter. Click any preset in the calculator to load it with full parameters.
 
