@@ -14,7 +14,7 @@
 
 Most LLM cost calculators make four predictable mistakes:
 
-1. **Active params for MoE memory.** DeepSeek V4 Pro has 49B active params and 284B total. A calculator using `active_params` for VRAM says 24 GB at Q4. The correct answer is 142 GB.
+1. **Active params for MoE memory.** DeepSeek V4 Pro has 49B active params and 1.6T total. A calculator using `active_params` for VRAM says 24 GB at Q4. The correct answer is 800 GB — a 32× gap.
 2. **Weight quantization bytes for KV cache.** On Qwen3-32B at 32K context with 4 concurrent requests, the KV cache in FP16 is 34 GB. The Q4 model weights are 16 GB. The cache is twice the model. Applying weight quantization to KV produces 8.5 GB instead of 34 GB.
 3. **No throughput model.** Fitting in VRAM is necessary but not sufficient. Prefill is compute-bound. Decode is bandwidth-bound. GPU count = `max(gpus_for_prefill, gpus_for_decode, gpus_for_vram)`.
 4. **No replica multiplier.** Two RTX 3090s at reserved pricing is $547/month, not the $274/month a single-GPU calculator quotes. The GPU bill doubles the moment you take HA seriously.
@@ -42,7 +42,7 @@ These four mistakes compound. A naive calculator says Qwen3-32B at 64K context w
 | Code Assistant | Qwen3-32B Q4 | 32K | On-demand | $1,889/mo (2× A100 40GB) | $168/mo (GPT-4o) | 91% |
 | Enterprise RAG | Qwen3-32B Q4 | 64K | Reserved 1y | $7,700/mo (6× A100 80GB) | $360/mo (GPT-4o) | 95% |
 | Startup MVP | Gemma 3-27B Q4 | 16K | Spot | $331/mo (1× A100 40GB) | $17/mo (GPT-4o) | 95% |
-| High-Volume API Replacement | Qwen3-30B-A3B MoE Q4 | 8K | Reserved 1y | $1,200/mo (2× A100 40GB) | $750/mo (GPT-4o) | 38% |
+| High-Volume API Replacement | Qwen3-30B-A3B MoE Q4 | 8K | Reserved 1y | $1,200/mo (2× A100 40GB) | $3,000/mo (GPT-4o) | **self-host wins 60%** |
 
 All prices April 2026. GPU costs from RunPod and Lambda; API costs from OpenRouter. Click any preset in the calculator to load it with full parameters.
 

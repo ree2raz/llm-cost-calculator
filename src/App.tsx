@@ -134,8 +134,8 @@ export default function App() {
 
   // Calculations
   const vramData = useMemo(() =>
-    calculateVRAM(model, quantization, kvDtype, contextLength, concurrent),
-  [model, quantization, kvDtype, contextLength, concurrent]);
+    calculateVRAM(model, quantization, kvDtype, contextLength, concurrent, avgTokens),
+  [model, quantization, kvDtype, contextLength, concurrent, avgTokens]);
 
   const gpuRec = useMemo(() =>
     recommendGPU(vramData, model, quantization, kvDtype, avgTokens, inputRatio, dailyVolume, concurrent, peakFactor, replicaCount, mfu),
@@ -563,6 +563,7 @@ export default function App() {
                   </div>
                   <div>
                     <span style={{ color: 'var(--accent-info)' }}>VRAM</span> = weights + KV_cache × concurrent + 15% overhead<br />
+                    KV sized on avg session ({formatTokens(Math.min(avgTokens, contextLength))} tokens), not max window<br />
                     = {formatBytes(vramData.breakdown.weights)} + {formatBytes(vramData.breakdown.kv / concurrent)} × {concurrent} + 15%<br />
                     = <span style={{ color: 'var(--accent-success)' }}>{formatBytes(vramData.totalVRAM)}</span>
                   </div>

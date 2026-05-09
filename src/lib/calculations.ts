@@ -20,7 +20,8 @@ export function calculateVRAM(
   quantization: string,
   kvDtype: string,
   contextLength: number,
-  concurrentRequests: number
+  concurrentRequests: number,
+  avgTokens?: number,
 ): VRAMResult {
   const q = QUANTIZATIONS.find(x => x.key === quantization) || QUANTIZATIONS[2];
   const kv = KV_DTYPES.find(x => x.key === kvDtype) || KV_DTYPES[0];
@@ -37,7 +38,10 @@ export function calculateVRAM(
     kvPerToken = 2 * model.layers * kvHeads * headDim * kv.bytes;
   }
 
-  const totalKV = kvPerToken * contextLength * concurrentRequests;
+  // Size KV on actual avg session length (paged KV, not worst-case fill).
+  // contextLength is the max window; avgTokens is the realistic allocation.
+  const kvTokens = avgTokens != null ? Math.min(avgTokens, contextLength) : contextLength;
+  const totalKV = kvPerToken * kvTokens * concurrentRequests;
   const overhead = (modelVRAM + totalKV) * 0.15;
   const totalVRAM = modelVRAM + totalKV + overhead;
 
@@ -381,7 +385,7 @@ export function generateBreakEvenData(
   const util = Math.max(0.2, Math.min(1, gpuUtilization / 100));
 
   const blendedPrice = (apiPricing.input * cacheMult * (inputRatio / 100) + apiPricing.output * ((100 - inputRatio) / 100)) * batchMult;
-  const baseVramData = calculateVRAM(model, quantization, kvDtype, contextLength, concurrentRequests);
+  const baseVramData = calculateVRAM(model, quantization, kvDtype, contextLength, concurrentRequests, avgTokens);
   const baseGpuRec = recommendGPU(baseVramData, model, quantization, kvDtype, avgTokens, inputRatio, 100, concurrentRequests, peakFactor, replicas, mfu);
   const exactBreakEven = blendedPrice > 0
     ? (baseGpuRec.count * baseGpuRec.gpu.hourly * 730 * tierMult / util) / ((avgTokens * 30 / 1e6) * blendedPrice)
@@ -400,7 +404,7 @@ export function generateBreakEvenData(
     const outputTokens = totalTokens * ((100 - inputRatio) / 100);
     const apiCost = ((inputTokens / 1e6 * apiPricing.input * cacheMult) + (outputTokens / 1e6 * apiPricing.output)) * batchMult;
 
-    const vramData = calculateVRAM(model, quantization, kvDtype, contextLength, concurrentRequests);
+    const vramData = calculateVRAM(model, quantization, kvDtype, contextLength, concurrentRequests, avgTokens);
     const gpuRec = recommendGPU(vramData, model, quantization, kvDtype, avgTokens, inputRatio, vol, concurrentRequests, peakFactor, replicas, mfu);
     const selfHosted = (gpuRec.count * gpuRec.gpu.hourly * 730 * tierMult) / util;
 

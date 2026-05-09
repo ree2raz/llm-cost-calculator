@@ -166,7 +166,7 @@ export const MODELS: Record<string, ModelFamily> = {
     family: 'DeepSeek',
     variants: [
       { name: 'DeepSeek V4 Flash', params: 284, active_params: 13, layers: 61, hidden: 7168, heads: 128, kv_heads: 128, context: 1048576, arch: 'mla', kv_dim: 512 },
-      { name: 'DeepSeek V4 Pro', params: 284, active_params: 49, layers: 61, hidden: 7168, heads: 128, kv_heads: 128, context: 1048576, arch: 'mla', kv_dim: 512 },
+      { name: 'DeepSeek V4 Pro', params: 1600, active_params: 49, layers: 61, hidden: 7168, heads: 128, kv_heads: 128, context: 1048576, arch: 'mla', kv_dim: 512 },
       { name: 'DeepSeek R1', params: 671, active_params: 37, layers: 61, hidden: 7168, heads: 128, kv_heads: 128, context: 163840, arch: 'mla', kv_dim: 512 },
       { name: 'DeepSeek R1 Distill-Qwen 32B', params: 32, layers: 64, hidden: 5120, heads: 40, kv_heads: 8, context: 32768, arch: 'gqa' },
       { name: 'DeepSeek R1 Distill-Llama 70B', params: 70, layers: 80, hidden: 8192, heads: 64, kv_heads: 8, context: 131072, arch: 'gqa' },
@@ -235,5 +235,5 @@ export const PRESETS: Preset[] = [
   { name: 'Code Assistant', family: 'qwen3', variant: 'Qwen3-32B', quantization: 'q4_k_m', contextLength: 32768, concurrent: 4, dailyVolume: 200, avgTokens: 4000, inputRatio: 40, peakFactor: 2.0, replicaCount: 1, pricingTier: 'on_demand', mfu: 0.35 },
   { name: 'Enterprise RAG', family: 'qwen3', variant: 'Qwen3-32B', quantization: 'q4_k_m', contextLength: 65536, concurrent: 8, dailyVolume: 1000, avgTokens: 3000, inputRatio: 80, peakFactor: 2.5, replicaCount: 2, pricingTier: 'reserved_1y', mfu: 0.30 },
   { name: 'Startup MVP', family: 'gemma3', variant: 'Gemma 3-27B', quantization: 'q4_k_m', contextLength: 16384, concurrent: 2, dailyVolume: 100, avgTokens: 1000, inputRatio: 60, peakFactor: 3.0, replicaCount: 1, pricingTier: 'spot', mfu: 0.35 },
-  { name: 'High-Volume API Replacement', family: 'qwen3', variant: 'Qwen3-30B-A3B (MoE)', quantization: 'q4_k_m', contextLength: 8192, concurrent: 32, dailyVolume: 5000, avgTokens: 800, inputRatio: 50, peakFactor: 1.5, replicaCount: 2, pricingTier: 'reserved_1y', mfu: 0.40 },
+  { name: 'High-Volume API Replacement', family: 'qwen3', variant: 'Qwen3-30B-A3B (MoE)', quantization: 'q4_k_m', contextLength: 8192, concurrent: 32, dailyVolume: 20000, avgTokens: 800, inputRatio: 50, peakFactor: 1.5, replicaCount: 2, pricingTier: 'reserved_1y', mfu: 0.40 },
 ];
