@@ -123,16 +123,17 @@ function getDecodeEfficiency(
   generation: GPU['generation'],
   quantBytes: number,
   batchSize: number,
+  quantKey: string,
   awqKernel: 'marlin' | 'default' = 'marlin',
   isMoE: boolean = false,
 ): number {
-  const isAWQ = quantBytes >= 0.4 && quantBytes <= 1.0;
+  const isAWQ = quantKey.startsWith('awq');
   let quantBucket: string;
   if (isMoE) {
     quantBucket = quantBytes >= 2 ? 'moe_fp16' : 'moe_awq_marlin';
   } else {
     quantBucket = quantBytes >= 2 ? 'fp16' :
-      (isAWQ ? `awq_${awqKernel}` : (quantBytes >= 0.4 ? 'q4' : 'q2'));
+      (isAWQ ? `awq_${awqKernel}` : 'fp16');
   }
 
   const genData = EFFICIENCY[generation] || EFFICIENCY['Ampere'];
@@ -161,15 +162,16 @@ function getDecodeEfficiency(
 export function getConfidence(
   generation: GPU['generation'],
   quantBytes: number,
+  quantKey: string,
   awqKernel: 'marlin' | 'default' = 'marlin',
   isMoE: boolean = false,
 ): Confidence {
-  const isAWQ = quantBytes >= 0.4 && quantBytes <= 1.0;
+  const isAWQ = quantKey.startsWith('awq');
   let quantBucket: string;
   if (isMoE) {
     quantBucket = quantBytes >= 2 ? 'moe_fp16' : 'moe_awq_marlin';
   } else {
-    quantBucket = quantBytes >= 2 ? 'fp16' : (isAWQ ? `awq_${awqKernel}` : 'q4');
+    quantBucket = quantBytes >= 2 ? 'fp16' : (isAWQ ? `awq_${awqKernel}` : 'fp16');
   }
   const genData = EFFICIENCY[generation];
   if (!genData) { return 'unmeasured'; }
@@ -195,7 +197,7 @@ export function calculateThroughput(
 
   // Decode: memory-bandwidth-bound. Efficiency from per-GPU lookup table.
   const isMoE = model.arch === 'moe';
-  const decodeEfficiency = getDecodeEfficiency(gpu.generation, quantBytes, batchSize, awqKernel, isMoE);
+  const decodeEfficiency = getDecodeEfficiency(gpu.generation, quantBytes, batchSize, quantizationKey, awqKernel, isMoE);
   const weightsBytes = activeParams * 1e9 * quantBytes;
   const kvPerSeqBytes = kvBytesPerToken * avgContext;
   const bytesReadPerStep = weightsBytes + batchSize * kvPerSeqBytes;
