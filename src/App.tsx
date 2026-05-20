@@ -184,6 +184,14 @@ export default function App() {
     if (gb >= 1000) return `${(gb / 1024).toFixed(2)} TB`;
     return `${gb.toFixed(2)} GB`;
   };
+  const formatSmallBytes = (bytes: number) => {
+    const kb = bytes / 1024;
+    if (kb < 1) return `${bytes.toFixed(0)} B`;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    const mb = kb / 1024;
+    if (mb < 1024) return `${mb.toFixed(2)} MB`;
+    return `${(mb / 1024).toFixed(2)} GB`;
+  };
   const formatTokens = (n: number) => {
     if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
     if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
@@ -566,7 +574,7 @@ export default function App() {
                         = 2 × {model.layers} × {model.kv_heads || model.heads} × {(model.hidden / model.heads).toFixed(0)} × {kvBytes}<br />
                       </>
                     )}
-                    = <span style={{ color: 'var(--accent-success)' }}>{formatBytes(calculateKVPerToken(model, kvBytes))}/token</span>
+                    = <span style={{ color: 'var(--accent-success)' }}>{formatSmallBytes(calculateKVPerToken(model, kvBytes))}/token</span>
                   </div>
                   <div>
                     <span style={{ color: 'var(--accent-info)' }}>VRAM</span> = weights + KV_cache × concurrent + 15% overhead<br />
