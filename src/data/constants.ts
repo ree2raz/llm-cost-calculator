@@ -10,14 +10,23 @@ export interface KVDtype {
   bytes: number;
 }
 
+export interface GPUPricing {
+  provider: string;
+  on_demand: number;
+  reserved_1y?: number;
+  spot?: number;
+  source: string;
+  updated: string;
+}
+
 export interface GPU {
   name: string;
   vram: number;
-  hourly: number;
   hbm_gbps: number;
   fp16_tflops: number;
   tp_capable: boolean;
   generation: 'Ampere' | 'Ada' | 'Hopper' | 'Blackwell' | 'Unknown';
+  pricing: GPUPricing[];
 }
 
 export interface ModelVariant {
@@ -79,18 +88,102 @@ export const KV_DTYPES: KVDtype[] = [
   { key: 'int4', label: 'INT4', bytes: 0.5 },
 ];
 
+// Multi-provider GPU pricing snapshot — May 2026.
+// Sources: runpod.io/pricing, lambda.ai/pricing, vast.ai/pricing,
+// aws.amazon.com/ec2/instance-types/{g5,p4,p5}, cloud.google.com/compute/gpus-pricing,
+// spheron.network cross-provider comparison.
+// Spot rates fluctuate; reserved/CUD where listed publicly.
+const GPU_UPDATED = '2026-05';
+
 export const GPUS: GPU[] = [
-  { name: 'RTX 3090', vram: 24, hourly: 0.49, hbm_gbps: 936, fp16_tflops: 71, tp_capable: false, generation: 'Ampere' },
-  { name: 'RTX 4090', vram: 24, hourly: 0.59, hbm_gbps: 1008, fp16_tflops: 165, tp_capable: false, generation: 'Ada' },
-  { name: 'RTX 5090', vram: 32, hourly: 1.58, hbm_gbps: 1792, fp16_tflops: 419, tp_capable: false, generation: 'Blackwell' },
-  { name: 'L4', vram: 24, hourly: 0.49, hbm_gbps: 300, fp16_tflops: 31, tp_capable: false, generation: 'Ada' },
-  { name: 'A10G', vram: 24, hourly: 1.10, hbm_gbps: 600, fp16_tflops: 125, tp_capable: false, generation: 'Ampere' },
-  { name: 'L40S', vram: 48, hourly: 1.34, hbm_gbps: 864, fp16_tflops: 362, tp_capable: true, generation: 'Ada' },
-  { name: 'A100 40GB', vram: 40, hourly: 1.10, hbm_gbps: 1555, fp16_tflops: 312, tp_capable: true, generation: 'Ampere' },
-  { name: 'A100 80GB', vram: 80, hourly: 2.31, hbm_gbps: 1935, fp16_tflops: 312, tp_capable: true, generation: 'Ampere' },
-  { name: 'H100 80GB', vram: 80, hourly: 3.39, hbm_gbps: 3350, fp16_tflops: 989, tp_capable: true, generation: 'Hopper' },
-  { name: 'H200 141GB', vram: 141, hourly: 4.31, hbm_gbps: 4800, fp16_tflops: 989, tp_capable: true, generation: 'Hopper' },
-  { name: 'B200', vram: 192, hourly: 6.50, hbm_gbps: 8000, fp16_tflops: 2250, tp_capable: true, generation: 'Blackwell' },
+  {
+    name: 'RTX 3090', vram: 24, hbm_gbps: 936, fp16_tflops: 71, tp_capable: false, generation: 'Ampere',
+    pricing: [
+      { provider: 'RunPod', on_demand: 0.43, spot: 0.22, source: 'runpod.io/pricing', updated: GPU_UPDATED },
+      { provider: 'Vast.ai', on_demand: 0.22, spot: 0.12, source: 'vast.ai/pricing', updated: GPU_UPDATED },
+    ],
+  },
+  {
+    name: 'RTX 4090', vram: 24, hbm_gbps: 1008, fp16_tflops: 165, tp_capable: false, generation: 'Ada',
+    pricing: [
+      { provider: 'RunPod', on_demand: 0.69, spot: 0.34, source: 'runpod.io/pricing', updated: GPU_UPDATED },
+      { provider: 'Vast.ai', on_demand: 0.29, spot: 0.16, source: 'vast.ai/pricing', updated: GPU_UPDATED },
+    ],
+  },
+  {
+    name: 'RTX 5090', vram: 32, hbm_gbps: 1792, fp16_tflops: 419, tp_capable: false, generation: 'Blackwell',
+    pricing: [
+      { provider: 'RunPod', on_demand: 0.99, spot: 0.69, source: 'runpod.io/pricing', updated: GPU_UPDATED },
+      { provider: 'Vast.ai', on_demand: 0.95, spot: 0.55, source: 'vast.ai/pricing', updated: GPU_UPDATED },
+    ],
+  },
+  {
+    name: 'L4', vram: 24, hbm_gbps: 300, fp16_tflops: 31, tp_capable: false, generation: 'Ada',
+    pricing: [
+      { provider: 'GCP', on_demand: 0.71, reserved_1y: 0.65, spot: 0.62, source: 'cloud.google.com/compute/gpus-pricing', updated: GPU_UPDATED },
+      { provider: 'RunPod', on_demand: 0.43, spot: 0.32, source: 'runpod.io/pricing', updated: GPU_UPDATED },
+    ],
+  },
+  {
+    name: 'A10G', vram: 24, hbm_gbps: 600, fp16_tflops: 125, tp_capable: false, generation: 'Ampere',
+    pricing: [
+      { provider: 'AWS', on_demand: 1.21, reserved_1y: 0.80, spot: 0.50, source: 'aws.amazon.com/ec2/instance-types/g5', updated: GPU_UPDATED },
+      { provider: 'RunPod', on_demand: 0.75, spot: 0.50, source: 'runpod.io/pricing', updated: GPU_UPDATED },
+    ],
+  },
+  {
+    name: 'L40S', vram: 48, hbm_gbps: 864, fp16_tflops: 362, tp_capable: true, generation: 'Ada',
+    pricing: [
+      { provider: 'RunPod', on_demand: 0.79, spot: 0.59, source: 'runpod.io/pricing', updated: GPU_UPDATED },
+      { provider: 'Lambda', on_demand: 1.40, source: 'lambda.ai/pricing', updated: GPU_UPDATED },
+    ],
+  },
+  {
+    name: 'A100 40GB', vram: 40, hbm_gbps: 1555, fp16_tflops: 312, tp_capable: true, generation: 'Ampere',
+    pricing: [
+      { provider: 'RunPod', on_demand: 1.19, spot: 0.79, source: 'runpod.io/pricing', updated: GPU_UPDATED },
+      { provider: 'Lambda', on_demand: 1.29, source: 'lambda.ai/pricing', updated: GPU_UPDATED },
+      { provider: 'Vast.ai', on_demand: 1.10, spot: 0.79, source: 'vast.ai/pricing', updated: GPU_UPDATED },
+      { provider: 'AWS', on_demand: 4.10, reserved_1y: 2.61, spot: 1.60, source: 'aws.amazon.com/ec2/instance-types/p4', updated: GPU_UPDATED },
+      { provider: 'GCP', on_demand: 3.67, reserved_1y: 2.91, spot: 1.10, source: 'cloud.google.com/compute/gpus-pricing', updated: GPU_UPDATED },
+    ],
+  },
+  {
+    name: 'A100 80GB', vram: 80, hbm_gbps: 1935, fp16_tflops: 312, tp_capable: true, generation: 'Ampere',
+    pricing: [
+      { provider: 'RunPod', on_demand: 1.89, spot: 1.29, source: 'runpod.io/pricing', updated: GPU_UPDATED },
+      { provider: 'Lambda', on_demand: 2.49, source: 'lambda.ai/pricing', updated: GPU_UPDATED },
+      { provider: 'Vast.ai', on_demand: 1.29, spot: 0.79, source: 'vast.ai/pricing', updated: GPU_UPDATED },
+      { provider: 'AWS', on_demand: 4.30, reserved_1y: 2.74, spot: 1.85, source: 'aws.amazon.com/ec2/instance-types/p4', updated: GPU_UPDATED },
+      { provider: 'GCP', on_demand: 3.67, reserved_1y: 2.91, spot: 1.10, source: 'cloud.google.com/compute/gpus-pricing', updated: GPU_UPDATED },
+    ],
+  },
+  {
+    name: 'H100 80GB', vram: 80, hbm_gbps: 3350, fp16_tflops: 989, tp_capable: true, generation: 'Hopper',
+    pricing: [
+      { provider: 'RunPod', on_demand: 2.69, spot: 1.99, source: 'runpod.io/pricing', updated: GPU_UPDATED },
+      { provider: 'Lambda', on_demand: 2.99, source: 'lambda.ai/pricing', updated: GPU_UPDATED },
+      { provider: 'Vast.ai', on_demand: 1.89, spot: 1.47, source: 'vast.ai/pricing', updated: GPU_UPDATED },
+      { provider: 'AWS', on_demand: 4.10, reserved_1y: 2.61, spot: 2.00, source: 'aws.amazon.com/ec2/instance-types/p5', updated: GPU_UPDATED },
+      { provider: 'GCP', on_demand: 10.50, reserved_1y: 6.50, source: 'cloud.google.com/compute/gpus-pricing', updated: GPU_UPDATED },
+    ],
+  },
+  {
+    name: 'H200 141GB', vram: 141, hbm_gbps: 4800, fp16_tflops: 989, tp_capable: true, generation: 'Hopper',
+    pricing: [
+      { provider: 'RunPod', on_demand: 3.99, spot: 3.59, source: 'runpod.io/pricing', updated: GPU_UPDATED },
+      { provider: 'Lambda', on_demand: 3.79, source: 'lambda.ai/pricing', updated: GPU_UPDATED },
+      { provider: 'AWS', on_demand: 4.98, reserved_1y: 3.50, source: 'aws.amazon.com/ec2/instance-types/p5', updated: GPU_UPDATED },
+    ],
+  },
+  {
+    name: 'B200', vram: 192, hbm_gbps: 8000, fp16_tflops: 2250, tp_capable: true, generation: 'Blackwell',
+    pricing: [
+      { provider: 'RunPod', on_demand: 5.58, spot: 4.99, source: 'runpod.io/pricing', updated: GPU_UPDATED },
+      { provider: 'Lambda', on_demand: 5.29, source: 'lambda.ai/pricing', updated: GPU_UPDATED },
+      { provider: 'AWS', on_demand: 14.24, spot: 3.24, source: 'aws.amazon.com/ec2/instance-types/p6', updated: GPU_UPDATED },
+    ],
+  },
 ];
 
 export const MODELS: Record<string, ModelFamily> = {
@@ -172,6 +265,20 @@ export const MODELS: Record<string, ModelFamily> = {
       { name: 'DeepSeek R1 Distill-Llama 70B', params: 70, layers: 80, hidden: 8192, heads: 64, kv_heads: 8, context: 131072, arch: 'gqa' },
     ]
   },
+  'llama3': {
+    family: 'Llama 3.x (Meta)',
+    variants: [
+      { name: 'Llama 3.1 8B', params: 8, layers: 32, hidden: 4096, heads: 32, kv_heads: 8, context: 131072, arch: 'gqa' },
+      { name: 'Llama 3.3 70B', params: 70, layers: 80, hidden: 8192, heads: 64, kv_heads: 8, context: 131072, arch: 'gqa' },
+    ]
+  },
+  'llama4': {
+    family: 'Llama 4 (Meta, est.)',
+    variants: [
+      { name: 'Llama 4 Scout 109B (est.)', params: 109, active_params: 17, layers: 48, hidden: 5120, heads: 40, kv_heads: 8, context: 1048576, arch: 'moe', moe_topk: 1 },
+      { name: 'Llama 4 Maverick 400B (est.)', params: 400, active_params: 17, layers: 48, hidden: 5120, heads: 40, kv_heads: 8, context: 1048576, arch: 'moe', moe_topk: 1 },
+    ]
+  },
   'custom': {
     family: 'Custom Model',
     variants: [
@@ -225,6 +332,10 @@ export const API_PRICING: APIPricing[] = [
   { model: 'Gemma 4-E2B', provider: 'Google', input: 0.03, output: 0.06, cache: 0.50 },
   { model: 'Mistral Large 3', provider: 'Mistral', input: 2.00, output: 6.00, cache: 0.50 },
   { model: 'Mistral Small 3.2', provider: 'Mistral', input: 0.075, output: 0.20, cache: 0.50 },
+  { model: 'Llama 4 Scout 109B', provider: 'Meta', input: 0.08, output: 0.30, cache: 0.50 },
+  { model: 'Llama 4 Maverick 400B', provider: 'Meta', input: 0.15, output: 0.60, cache: 0.50 },
+  { model: 'Llama 3.3 70B', provider: 'Meta', input: 0.10, output: 0.32, cache: 0.50 },
+  { model: 'Llama 3.1 8B', provider: 'Meta', input: 0.02, output: 0.05, cache: 0.50 },
 ];
 
 export const BATCH_DISCOUNT = 0.50;
@@ -236,4 +347,6 @@ export const PRESETS: Preset[] = [
   { name: 'Enterprise RAG', family: 'qwen3', variant: 'Qwen3-32B', quantization: 'q4_k_m', contextLength: 65536, concurrent: 8, dailyVolume: 1000, avgTokens: 12000, inputRatio: 80, peakFactor: 2.5, replicaCount: 2, pricingTier: 'on_demand', mfu: 0.30 },
   { name: 'Startup MVP', family: 'gemma3', variant: 'Gemma 3-27B', quantization: 'q4_k_m', contextLength: 16384, concurrent: 2, dailyVolume: 100, avgTokens: 1000, inputRatio: 60, peakFactor: 3.0, replicaCount: 1, pricingTier: 'spot', mfu: 0.35 },
   { name: 'High-Volume API Replacement', family: 'qwen3', variant: 'Qwen3-30B-A3B (MoE)', quantization: 'q4_k_m', contextLength: 8192, concurrent: 32, dailyVolume: 20000, avgTokens: 800, inputRatio: 50, peakFactor: 1.5, replicaCount: 2, pricingTier: 'reserved_1y', mfu: 0.40 },
+  { name: 'Llama 4 Scout — High Volume', family: 'llama4', variant: 'Llama 4 Scout 109B (est.)', quantization: 'q4_k_m', contextLength: 16384, concurrent: 16, dailyVolume: 10000, avgTokens: 1000, inputRatio: 50, peakFactor: 1.5, replicaCount: 2, pricingTier: 'reserved_1y', mfu: 0.40 },
+  { name: 'Llama 3.3 70B — Enterprise Chat', family: 'llama3', variant: 'Llama 3.3 70B', quantization: 'q4_k_m', contextLength: 8192, concurrent: 8, dailyVolume: 2000, avgTokens: 1500, inputRatio: 60, peakFactor: 2.5, replicaCount: 2, pricingTier: 'reserved_1y', mfu: 0.35 },
 ];

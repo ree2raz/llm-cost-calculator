@@ -5,3 +5,6 @@ CONTEXT.md
 node_modules/
 openrouter_models_extracted.json
 dist/
+.camofox-test.sh
+.smoke.mts
+.fmt.mts
