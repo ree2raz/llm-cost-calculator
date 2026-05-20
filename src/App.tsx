@@ -112,6 +112,9 @@ export default function App() {
       if (p.has('peakFactor')) setPeakFactor(Number(p.get('peakFactor')));
       if (p.has('pricingTier')) setPricingTier(p.get('pricingTier')!);
       if (p.has('mfu')) setMfu(Number(p.get('mfu')));
+      if (p.has('opsEnabled')) setOpsEnabled(p.get('opsEnabled') === '1');
+      if (p.has('opsFte')) setOpsFte(Number(p.get('opsFte')));
+      if (p.has('opsCostPerFte')) setOpsCostPerFte(Number(p.get('opsCostPerFte')));
     } catch {}
   }, []);
 
@@ -154,12 +157,12 @@ export default function App() {
   const providerQuotes = useMemo(() => getGpuPriceList(gpuRec.gpu, pricingTier), [gpuRec.gpu, pricingTier]);
 
   const costs = useMemo(() =>
-    calculateCosts(dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier),
-  [dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier]);
+    calculateCosts(dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier, opsMonthly),
+  [dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier, opsMonthly]);
 
   const breakEvenData = useMemo(() =>
-    generateBreakEvenData(avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, cacheHitRatio, batchEnabled, pricingTier),
-  [avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, cacheHitRatio, batchEnabled, pricingTier]);
+    generateBreakEvenData(avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, cacheHitRatio, batchEnabled, pricingTier, opsMonthly),
+  [avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, cacheHitRatio, batchEnabled, pricingTier, opsMonthly]);
 
   const breakEvenVal = useMemo(() => findBreakEven(breakEvenData), [breakEvenData]);
 
@@ -191,6 +194,7 @@ export default function App() {
     setApiModel('GPT-4o'); setCacheHitRatio(0); setGpuUtilization(85);
     setBatchEnabled(false); setKvDtype('fp16'); setReplicaCount(p.replicaCount);
     setPeakFactor(p.peakFactor); setPricingTier(p.pricingTier); setMfu(p.mfu);
+    setOpsEnabled(false); setOpsFte(0.5); setOpsCostPerFte(150000);
     setResetKey(k => k + 1);
   };
 
@@ -381,6 +385,37 @@ export default function App() {
                     onChange={setGpuUtilization} format={v => `${v}%`} />
                   <div className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>Cost inflated ×{parseFloat((1 / (gpuUtilization / 100)).toFixed(2))} at {gpuUtilization}% util</div>
 
+                  {/* Ops overhead — engineering time as honest self-hosted cost */}
+                  <div className="pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+                    <label className="flex items-center justify-between cursor-pointer mb-2">
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Include ops overhead</span>
+                      <input type="checkbox" checked={opsEnabled}
+                        onChange={e => setOpsEnabled(e.target.checked)}
+                        className="w-5 h-5 rounded cursor-pointer" style={{ accentColor: 'var(--accent-primary)' }} />
+                    </label>
+                    <div className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+                      Engineering FTE × loaded cost — added to self-hosted only.
+                    </div>
+                    {opsEnabled && (
+                      <div className="space-y-3">
+                        <Slider label="Engineering FTE" value={opsFte} min={0.25} max={2} step={0.25}
+                          onChange={setOpsFte} format={v => `${v} FTE`} />
+                        <div>
+                          <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Loaded cost / FTE</label>
+                          <select value={opsCostPerFte} onChange={e => setOpsCostPerFte(Number(e.target.value))} className="gruv-input">
+                            <option value={100000}>Junior — $100k / yr</option>
+                            <option value={150000}>Mid — $150k / yr</option>
+                            <option value={200000}>Senior — $200k / yr</option>
+                            <option value={300000}>Staff — $300k / yr</option>
+                          </select>
+                        </div>
+                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          Adds {formatCost(opsMonthly)}/mo to self-hosted ({opsFte} FTE × ${(opsCostPerFte / 1000).toFixed(0)}k/yr).
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {quantization === 'awq4' && gpuRec.gpu.generation !== 'Ada' && (
                     <div>
                       <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>AWQ Kernel</label>
@@ -501,6 +536,11 @@ export default function App() {
                     range {formatCost(costs.selfHostedMonthlyLow)}–{formatCost(costs.selfHostedMonthlyHigh)}
                   </div>
                   <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{formatPerRequest(costs.selfHostedPerTranscript)}/request {costs.storageCost > 1 ? `· ${costs.storageCost.toFixed(1)} GB artifact storage` : ''}</div>
+                  {costs.opsMonthly > 0 && (
+                    <div className="text-xs mt-1" style={{ color: 'var(--accent-warning)' }}>
+                      includes {formatCost(costs.opsMonthly)}/mo ops ({opsFte} FTE × ${(opsCostPerFte / 1000).toFixed(0)}k/yr) · GPU alone {formatCost(costs.selfHostedGpuMonthly)}/mo
+                    </div>
+                  )}
                 </div>
                 <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
                   <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--chart-api)' }}>API ({costs.apiPricing.provider})</div>
