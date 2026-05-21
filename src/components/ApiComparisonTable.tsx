@@ -5,18 +5,19 @@ import { formatCost, formatPerRequest } from '../lib/format';
 interface Props {
   rows: ApiCostRow[];
   selectedModel: string;
-  onSelect: (model: string) => void;
+  selectedProvider: string;
+  onSelect: (model: string, provider: string) => void;
   selfHostedMonthly: number;
   dailyVolume: number;
 }
 
-export default function ApiComparisonTable({ rows, selectedModel, onSelect, selfHostedMonthly, dailyVolume }: Props) {
+export default function ApiComparisonTable({ rows, selectedModel, selectedProvider, onSelect, selfHostedMonthly, dailyVolume }: Props) {
   const [showAll, setShowAll] = useState(false);
   const TOP_N = 10;
 
   const { visible, cheapest, currentRow, currentRank } = useMemo(() => {
     const cheapest = rows[0];
-    const currentIdx = rows.findIndex(r => r.model === selectedModel);
+    const currentIdx = rows.findIndex(r => r.model === selectedModel && r.provider === selectedProvider);
     const currentRow = currentIdx >= 0 ? rows[currentIdx] : undefined;
     const currentRank = currentIdx >= 0 ? currentIdx + 1 : null;
     let visible = showAll ? rows : rows.slice(0, TOP_N);
@@ -25,7 +26,7 @@ export default function ApiComparisonTable({ rows, selectedModel, onSelect, self
       visible = [...visible, currentRow];
     }
     return { visible, cheapest, currentRow, currentRank };
-  }, [rows, selectedModel, showAll]);
+  }, [rows, selectedModel, selectedProvider, showAll]);
 
   return (
     <div>
@@ -52,9 +53,9 @@ export default function ApiComparisonTable({ rows, selectedModel, onSelect, self
           </thead>
           <tbody>
             {visible.map((row, i) => {
-              const isSelected = row.model === selectedModel;
-              const isCheapest = row.model === cheapest.model;
-              const rank = rows.findIndex(r => r.model === row.model) + 1;
+              const isSelected = row.model === selectedModel && row.provider === selectedProvider;
+              const isCheapest = row.model === cheapest.model && row.provider === cheapest.provider;
+              const rank = rows.findIndex(r => r.model === row.model && r.provider === row.provider) + 1;
               // Volume at which self-hosted becomes cheaper than this API row (linear approx, no GPU stepping)
               const beVol = row.monthly > 0 && selfHostedMonthly > 0
                 ? Math.round(selfHostedMonthly * dailyVolume / row.monthly)
@@ -62,8 +63,8 @@ export default function ApiComparisonTable({ rows, selectedModel, onSelect, self
               const fmtBe = (v: number) => v >= 1_000_000 ? '>1M/day' : v >= 1000 ? `${(v / 1000).toFixed(1)}k/day` : `${v}/day`;
               const alreadyPast = beVol !== null && dailyVolume >= beVol;
               return (
-                <tr key={row.model}
-                  onClick={() => onSelect(row.model)}
+                <tr key={`${row.model}::${row.provider}`}
+                  onClick={() => onSelect(row.model, row.provider)}
                   className="cursor-pointer transition-colors"
                   style={{
                     backgroundColor: isSelected ? 'rgba(250, 189, 47, 0.10)' : 'transparent',
@@ -90,7 +91,15 @@ export default function ApiComparisonTable({ rows, selectedModel, onSelect, self
                       </span>
                     )}
                   </td>
-                  <td className="py-2 pr-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{row.provider}</td>
+                  <td className="py-2 pr-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {row.path === 'aggregator' && (
+                      <span style={{ color: 'var(--text-muted)', marginRight: 2 }}>via </span>
+                    )}
+                    {row.provider}
+                    {row.notes && (
+                      <span className="ml-1.5" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>{row.notes}</span>
+                    )}
+                  </td>
                   <td className="py-2 pr-2 text-right font-mono" style={{ color: 'var(--text-primary)' }}>{formatCost(row.monthly)}</td>
                   <td className="py-2 pr-2 text-right font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{formatPerRequest(row.perRequest)}</td>
                   <td className="py-2 text-right font-mono text-xs"
@@ -107,7 +116,7 @@ export default function ApiComparisonTable({ rows, selectedModel, onSelect, self
       <div className="flex items-center justify-between mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
         <div>
           {currentRow && currentRank && currentRank > TOP_N && !showAll && (
-            <span>Selected <span style={{ color: 'var(--accent-primary)' }}>{selectedModel}</span> is rank #{currentRank} of {rows.length}.</span>
+            <span>Selected <span style={{ color: 'var(--accent-primary)' }}>{selectedModel}</span> ({selectedProvider}) is rank #{currentRank} of {rows.length}.</span>
           )}
         </div>
         {rows.length > TOP_N && (

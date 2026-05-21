@@ -380,6 +380,7 @@ export function calculateCosts(
   model: ModelVariant,
   quantization: string,
   apiModelName: string,
+  apiProviderName: string | undefined,
   cacheHitRatio: number,
   gpuUtilization: number,
   batchEnabled: boolean,
@@ -403,7 +404,11 @@ export function calculateCosts(
   const storageGB = (model.params * 1e9 * quantBytesForStorage) / 1e9;
   const storageCost = storageGB * 0.10;
 
-  const apiPricing = API_PRICING.find(p => p.model === apiModelName) || API_PRICING[0];
+  const apiPricing = (apiProviderName
+    ? API_PRICING.find(p => p.model === apiModelName && p.provider === apiProviderName)
+    : undefined)
+    ?? API_PRICING.find(p => p.model === apiModelName)
+    ?? API_PRICING[0];
   const cacheMult = 1 - (cacheHitRatio / 100) * (apiPricing.cache || 0.5);
   const batchMult = batchEnabled ? BATCH_DISCOUNT : 1;
 
@@ -456,12 +461,17 @@ export function generateBreakEvenData(
   mfu: number,
   gpuUtilization: number,
   apiModelName: string,
+  apiProviderName: string | undefined,
   cacheHitRatio: number,
   batchEnabled: boolean,
   pricingTier: string,
   opsMonthly: number = 0
 ): BreakEvenPoint[] {
-  const apiPricing = API_PRICING.find(p => p.model === apiModelName) || API_PRICING[0];
+  const apiPricing = (apiProviderName
+    ? API_PRICING.find(p => p.model === apiModelName && p.provider === apiProviderName)
+    : undefined)
+    ?? API_PRICING.find(p => p.model === apiModelName)
+    ?? API_PRICING[0];
   const cacheMult = 1 - (cacheHitRatio / 100) * (apiPricing.cache || 0.5);
   const batchMult = batchEnabled ? BATCH_DISCOUNT : 1;
   const util = Math.max(0.2, Math.min(1, gpuUtilization / 100));
@@ -506,6 +516,8 @@ export interface ApiCostRow {
   perRequest: number;
   inputPerM: number;
   outputPerM: number;
+  path: 'proprietary' | 'aggregator';
+  notes?: string;
 }
 
 export function calculateAllApiCosts(
@@ -531,6 +543,8 @@ export function calculateAllApiCosts(
       perRequest: monthlyCalls > 0 ? monthly / monthlyCalls : 0,
       inputPerM: p.input,
       outputPerM: p.output,
+      path: p.path,
+      notes: p.notes,
     };
   }).sort((a, b) => a.monthly - b.monthly);
 }

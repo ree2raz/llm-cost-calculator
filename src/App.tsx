@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { MODELS, QUANTIZATIONS, KV_DTYPES, PRESETS } from './data/constants';
+import { MODELS, QUANTIZATIONS, KV_DTYPES, PRESETS, API_PRICING } from './data/constants';
 import type { ModelVariant, Preset } from './data/constants';
 import {
   calculateVRAM, calculateKVPerToken, calculateThroughput,
@@ -37,6 +37,7 @@ export default function App() {
   const [inputRatio, setInputRatio] = useState(DEFAULT_PRESET.inputRatio);
   const [customParams, setCustomParams] = useState(7);
   const [apiModel, setApiModel] = useState('GPT-4o');
+  const [apiProvider, setApiProvider] = useState('OpenAI');
   const [cacheHitRatio, setCacheHitRatio] = useState(0);
   const [gpuUtilization, setGpuUtilization] = useState(85);
   const [batchEnabled, setBatchEnabled] = useState(false);
@@ -100,12 +101,12 @@ export default function App() {
   // URL state
   const urlParams = useMemo(() => ({
     family, variant, quantization, contextLength, concurrent, dailyVolume,
-    avgTokens, inputRatio, customParams, apiModel, cacheHitRatio,
+    avgTokens, inputRatio, customParams, apiModel, apiProvider, cacheHitRatio,
     gpuUtilization, batchEnabled: batchEnabled ? '1' : '0',
     kvDtype, replicaCount, peakFactor, pricingTier, mfu,
     opsEnabled: opsEnabled ? '1' : '0', opsFte, opsCostPerFte,
   }), [family, variant, quantization, contextLength, concurrent, dailyVolume,
-    avgTokens, inputRatio, customParams, apiModel, cacheHitRatio,
+    avgTokens, inputRatio, customParams, apiModel, apiProvider, cacheHitRatio,
     gpuUtilization, batchEnabled, kvDtype, replicaCount, peakFactor, pricingTier, mfu,
     opsEnabled, opsFte, opsCostPerFte]);
 
@@ -142,7 +143,19 @@ export default function App() {
       if (p.has('avgTokens')) setAvgTokens(Number(p.get('avgTokens')));
       if (p.has('inputRatio')) setInputRatio(Number(p.get('inputRatio')));
       if (p.has('customParams')) setCustomParams(Number(p.get('customParams')));
-      if (p.has('apiModel')) setApiModel(p.get('apiModel')!);
+      if (p.has('apiModel')) {
+        const m = p.get('apiModel')!;
+        setApiModel(m);
+        if (p.has('apiProvider')) {
+          setApiProvider(p.get('apiProvider')!);
+        } else {
+          // Sync provider to first matching row for backwards-compat URLs without apiProvider
+          const row = API_PRICING.find(r => r.model === m);
+          if (row) setApiProvider(row.provider);
+        }
+      } else if (p.has('apiProvider')) {
+        setApiProvider(p.get('apiProvider')!);
+      }
       if (p.has('cacheHitRatio')) setCacheHitRatio(Number(p.get('cacheHitRatio')));
       if (p.has('gpuUtilization')) setGpuUtilization(Number(p.get('gpuUtilization')));
       if (p.has('batchEnabled')) setBatchEnabled(p.get('batchEnabled') === '1');
@@ -196,12 +209,12 @@ export default function App() {
   const providerQuotes = useMemo(() => getGpuPriceList(gpuRec.gpu, pricingTier), [gpuRec.gpu, pricingTier]);
 
   const costs = useMemo(() =>
-    calculateCosts(dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier, opsMonthly),
-  [dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier, opsMonthly]);
+    calculateCosts(dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, apiProvider, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier, opsMonthly),
+  [dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, apiProvider, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier, opsMonthly]);
 
   const breakEvenData = useMemo(() =>
-    generateBreakEvenData(avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, cacheHitRatio, batchEnabled, pricingTier, opsMonthly),
-  [avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, cacheHitRatio, batchEnabled, pricingTier, opsMonthly]);
+    generateBreakEvenData(avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, apiProvider, cacheHitRatio, batchEnabled, pricingTier, opsMonthly),
+  [avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, apiProvider, cacheHitRatio, batchEnabled, pricingTier, opsMonthly]);
 
   const breakEvenVal = useMemo(() => findBreakEven(breakEvenData), [breakEvenData]);
 
@@ -230,7 +243,7 @@ export default function App() {
     setFamily(p.family); setVariant(p.variant); setQuantization(p.quantization);
     setContextLength(p.contextLength); setConcurrent(p.concurrent); setDailyVolume(p.dailyVolume);
     setAvgTokens(p.avgTokens); setInputRatio(p.inputRatio); setCustomParams(7);
-    setApiModel('GPT-4o'); setCacheHitRatio(0); setGpuUtilization(85);
+    setApiModel('GPT-4o'); setApiProvider('OpenAI'); setCacheHitRatio(0); setGpuUtilization(85);
     setBatchEnabled(false); setKvDtype('fp16'); setReplicaCount(p.replicaCount);
     setPeakFactor(p.peakFactor); setPricingTier(p.pricingTier); setMfu(p.mfu);
     setOpsEnabled(false); setOpsFte(0.5); setOpsCostPerFte(150000);
@@ -402,7 +415,11 @@ export default function App() {
               </div>
 
               <div className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                Comparing against <span className="font-semibold" style={{ color: 'var(--accent-primary)' }}>{apiModel}</span>. Pick a different API in the comparison table →
+                Comparing against{' '}
+                <span className="font-semibold" style={{ color: 'var(--accent-primary)' }}>{costs.apiPricing.model}</span>
+                {' · '}
+                <span style={{ color: 'var(--text-secondary)' }}>{costs.apiPricing.provider}</span>.{' '}
+                Pick a different API in the comparison table →
               </div>
             </div>
 
@@ -806,7 +823,8 @@ export default function App() {
               <ApiComparisonTable
                 rows={apiCostRows}
                 selectedModel={apiModel}
-                onSelect={setApiModel}
+                selectedProvider={apiProvider}
+                onSelect={(model, provider) => { setApiModel(model); setApiProvider(provider); }}
                 selfHostedMonthly={costs.selfHostedMonthly}
                 dailyVolume={dailyVolume}
               />
