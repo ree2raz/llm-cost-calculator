@@ -24,27 +24,41 @@ export default function App() {
   });
 
   // State
-  const DEFAULT_PRESET = PRESETS[0]; // Customer Support Bot
-  const [family, setFamily] = useState(DEFAULT_PRESET.family);
-  const [variant, setVariant] = useState(DEFAULT_PRESET.variant);
+  // Default state — Gemma 4 26B MoE, realistic production traffic, on-demand pricing
+  const DEFAULT_STATE = {
+    family: 'gemma4',
+    variant: 'Gemma 4-26B-A4B MoE (est.)',
+    quantization: 'q4_k_m',
+    contextLength: 8192,
+    concurrent: 8,
+    dailyVolume: 1000,     // ~1k req/day: typical small-to-mid production deployment
+    avgTokens: 2000,       // ~2k input + 500 output tokens; real production average
+    inputRatio: 75,        // 75% input / 25% output (industry benchmark)
+    peakFactor: 2.5,
+    replicaCount: 1,
+    pricingTier: 'on_demand',
+    mfu: 0.35,
+  };
+  const [family, setFamily] = useState(DEFAULT_STATE.family);
+  const [variant, setVariant] = useState(DEFAULT_STATE.variant);
   const [awqKernel, setAwqKernel] = useState<'marlin' | 'default'>('marlin');
-  const [quantization, setQuantization] = useState(DEFAULT_PRESET.quantization);
+  const [quantization, setQuantization] = useState(DEFAULT_STATE.quantization);
   const [kvDtype, setKvDtype] = useState('fp16');
-  const [contextLength, setContextLength] = useState(DEFAULT_PRESET.contextLength);
-  const [concurrent, setConcurrent] = useState(DEFAULT_PRESET.concurrent);
-  const [dailyVolume, setDailyVolume] = useState(DEFAULT_PRESET.dailyVolume);
-  const [avgTokens, setAvgTokens] = useState(DEFAULT_PRESET.avgTokens);
-  const [inputRatio, setInputRatio] = useState(DEFAULT_PRESET.inputRatio);
+  const [contextLength, setContextLength] = useState(DEFAULT_STATE.contextLength);
+  const [concurrent, setConcurrent] = useState(DEFAULT_STATE.concurrent);
+  const [dailyVolume, setDailyVolume] = useState(DEFAULT_STATE.dailyVolume);
+  const [avgTokens, setAvgTokens] = useState(DEFAULT_STATE.avgTokens);
+  const [inputRatio, setInputRatio] = useState(DEFAULT_STATE.inputRatio);
   const [customParams, setCustomParams] = useState(7);
   const [apiModel, setApiModel] = useState('GPT-4o');
   const [apiProvider, setApiProvider] = useState('OpenAI');
   const [cacheHitRatio, setCacheHitRatio] = useState(0);
   const [gpuUtilization, setGpuUtilization] = useState(85);
   const [batchEnabled, setBatchEnabled] = useState(false);
-  const [replicaCount, setReplicaCount] = useState(DEFAULT_PRESET.replicaCount);
-  const [peakFactor, setPeakFactor] = useState(DEFAULT_PRESET.peakFactor);
-  const [pricingTier, setPricingTier] = useState(DEFAULT_PRESET.pricingTier);
-  const [mfu, setMfu] = useState(DEFAULT_PRESET.mfu);
+  const [replicaCount, setReplicaCount] = useState(DEFAULT_STATE.replicaCount);
+  const [peakFactor, setPeakFactor] = useState(DEFAULT_STATE.peakFactor);
+  const [pricingTier, setPricingTier] = useState(DEFAULT_STATE.pricingTier);
+  const [mfu, setMfu] = useState(DEFAULT_STATE.mfu);
   const [opsEnabled, setOpsEnabled] = useState(false);
   const [opsFte, setOpsFte] = useState(0.5);
   const [opsCostPerFte, setOpsCostPerFte] = useState(150000);
@@ -239,13 +253,13 @@ export default function App() {
   };
 
   const handleReset = () => {
-    const p = DEFAULT_PRESET;
-    setFamily(p.family); setVariant(p.variant); setQuantization(p.quantization);
-    setContextLength(p.contextLength); setConcurrent(p.concurrent); setDailyVolume(p.dailyVolume);
-    setAvgTokens(p.avgTokens); setInputRatio(p.inputRatio); setCustomParams(7);
+    const d = DEFAULT_STATE;
+    setFamily(d.family); setVariant(d.variant); setQuantization(d.quantization);
+    setContextLength(d.contextLength); setConcurrent(d.concurrent); setDailyVolume(d.dailyVolume);
+    setAvgTokens(d.avgTokens); setInputRatio(d.inputRatio); setCustomParams(7);
     setApiModel('GPT-4o'); setApiProvider('OpenAI'); setCacheHitRatio(0); setGpuUtilization(85);
-    setBatchEnabled(false); setKvDtype('fp16'); setReplicaCount(p.replicaCount);
-    setPeakFactor(p.peakFactor); setPricingTier(p.pricingTier); setMfu(p.mfu);
+    setBatchEnabled(false); setKvDtype('fp16'); setReplicaCount(d.replicaCount);
+    setPeakFactor(d.peakFactor); setPricingTier(d.pricingTier); setMfu(d.mfu);
     setOpsEnabled(false); setOpsFte(0.5); setOpsCostPerFte(150000);
     setResetKey(k => k + 1);
   };
