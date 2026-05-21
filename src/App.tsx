@@ -746,11 +746,16 @@ export default function App() {
                   </div>
                   <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{formatPerRequest(costs.selfHostedPerTranscript)}/request {costs.storageCost > 1 ? `· ${costs.storageCost.toFixed(1)} GB artifact storage` : ''}</div>
                   {costs.opsMonthly > 0 ? (
-                    <div className="text-xs mt-1" style={{ color: 'var(--accent-warning)' }}>
-                      includes {formatCost(costs.opsMonthly)}/mo ops ({opsFte} FTE × ${(opsCostPerFte / 1000).toFixed(0)}k/yr) · GPU alone {formatCost(costs.selfHostedGpuMonthly)}/mo
+                    <div className="text-xs mt-1">
+                      <div style={{ color: 'var(--accent-warning)' }}>
+                        includes {formatCost(costs.opsMonthly)}/mo ops ({opsFte} FTE × ${(opsCostPerFte / 1000).toFixed(0)}k/yr) · GPU alone {formatCost(costs.selfHostedGpuMonthly)}/mo
+                      </div>
+                      <button onClick={() => setOpsEnabled(false)}
+                        className="underline mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        − remove ops cost
+                      </button>
                     </div>
                   ) : (
-                    /* C: ops nudge — shown when self-hosting wins but ops is excluded */
                     costs.winner === 'self' && (
                       <div className="text-xs mt-1">
                         <button onClick={() => setOpsEnabled(true)}
