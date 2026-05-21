@@ -48,9 +48,47 @@ export default function App() {
   const [opsFte, setOpsFte] = useState(0.5);
   const [opsCostPerFte, setOpsCostPerFte] = useState(150000);
   const [showEngineering, setShowEngineering] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
   const [resetKey, setResetKey] = useState(0);
 
   const opsMonthly = opsEnabled ? (opsFte * opsCostPerFte) / 12 : 0;
+
+  const handleShareUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 2000);
+    } catch {}
+  };
+
+  const handleCopySummary = () => {
+    // costs / gpuRec / breakEvenVal are available via closure at call time
+    const fmtVol = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v);
+    const win = costs.winner === 'self' ? 'Self-hosting' : 'API';
+    const lines = [
+      'LLM Deploy Cost Calculator',
+      '─'.repeat(36),
+      `Model:   ${MODELS[family]?.family ?? family} ${variant} · ${quantization.toUpperCase()}`,
+      `Scale:   ${dailyVolume.toLocaleString()} req/day · ${formatTokens(avgTokens)} tokens/req`,
+      `         ${pricingTier.replace('_', ' ')} GPU pricing · ${inputRatio}/${100 - inputRatio} input/output`,
+      '',
+      `VERDICT: ${win} saves ${formatCost(costs.savings)}/mo (${costs.savingsPercent.toFixed(0)}% cheaper at current scale)`,
+      `  Self-hosted ${formatCost(costs.selfHostedMonthly)}/mo  — ${gpuRec.gpu.name} ×${gpuRec.count} (${gpuRec.price.provider} @ $${gpuRec.price.rate.toFixed(2)}/hr)`,
+      `  API         ${formatCost(costs.apiMonthly)}/mo  — ${costs.apiPricing.provider} · ${apiModel}`,
+      breakEvenVal
+        ? `  Break-even: ${fmtVol(breakEvenVal)} req/day (${dailyVolume > breakEvenVal ? 'you are past it' : 'you are below it'})`
+        : `  Break-even: never at this model + tier combination`,
+      '',
+      '─'.repeat(36),
+      window.location.href,
+    ];
+    try {
+      navigator.clipboard.writeText(lines.join('\n'));
+      setCopiedSummary(true);
+      setTimeout(() => setCopiedSummary(false), 2000);
+    } catch {}
+  };
 
   // Theme effect
   useEffect(() => {
@@ -247,6 +285,15 @@ export default function App() {
               Reset
             </button>
             <PresetSelector onSelect={handlePreset} resetKey={resetKey} />
+            <button onClick={handleShareUrl}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+              style={{
+                color: copiedUrl ? 'var(--accent-success)' : 'var(--text-secondary)',
+                border: `1px solid ${copiedUrl ? 'var(--accent-success)' : 'var(--border)'}`,
+                minWidth: '90px',
+              }}>
+              {copiedUrl ? '✓ copied' : 'Share link'}
+            </button>
             <ThemeToggle dark={dark} setDark={setDark} />
           </div>
         </div>
@@ -542,17 +589,29 @@ export default function App() {
                   : 'API wins at every volume — scale up before self-hosting';
               const accent = costs.winner === 'self' ? 'var(--accent-success)' : 'var(--accent-info)';
               return (
-                <div className="gruv-card px-5 py-4" style={{ borderLeft: `3px solid ${accent}` }}>
-                  <div className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
-                    {headline}
+                <div className="gruv-card px-5 py-4 flex items-start justify-between gap-4"
+                  style={{ borderLeft: `3px solid ${accent}` }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+                      {headline}
+                    </div>
+                    <div className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                      {sub}
+                      <span className="ml-3 text-xs font-mono px-1.5 py-0.5 rounded"
+                        style={{ backgroundColor: `${accent}22`, color: accent }}>
+                        {costs.savingsPercent.toFixed(0)}% cheaper
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                    {sub}
-                    <span className="ml-3 text-xs font-mono px-1.5 py-0.5 rounded"
-                      style={{ backgroundColor: `${accent}22`, color: accent }}>
-                      {costs.savingsPercent.toFixed(0)}% cheaper
-                    </span>
-                  </div>
+                  <button onClick={handleCopySummary}
+                    className="shrink-0 px-2.5 py-1.5 rounded text-xs font-medium transition-colors"
+                    style={{
+                      border: `1px solid ${copiedSummary ? 'var(--accent-success)' : 'var(--border)'}`,
+                      color: copiedSummary ? 'var(--accent-success)' : 'var(--text-muted)',
+                      minWidth: '108px',
+                    }}>
+                    {copiedSummary ? '✓ copied' : 'Copy summary'}
+                  </button>
                 </div>
               );
             })()}
