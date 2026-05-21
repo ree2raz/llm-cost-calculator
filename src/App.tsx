@@ -31,9 +31,9 @@ export default function App() {
     quantization: 'q4_k_m',
     contextLength: 8192,
     concurrent: 8,
-    dailyVolume: 1000,     // ~1k req/day: typical small-to-mid production deployment
-    avgTokens: 2000,       // ~2k input + 500 output tokens; real production average
-    inputRatio: 75,        // 75% input / 25% output (industry benchmark)
+    dailyVolume: 10000,    // 10k req/day: real SaaS — below this API always wins
+    avgTokens: 4000,       // system prompt + 2-3 turns history + response ≈ 3-4k tokens
+    inputRatio: 70,        // 70/30 input/output — typical conversational app
     peakFactor: 2.5,
     replicaCount: 1,
     pricingTier: 'on_demand',
