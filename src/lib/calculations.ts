@@ -314,9 +314,11 @@ export function recommendGPU(
     const gpusThroughput = Math.max(gpusForPrefill, gpusForDecode);
     const gpusVram = Math.max(1, Math.ceil(vramData.totalVRAM / (gpu.vram * 1e9)));
 
-    // Key: skip non-TP GPUs when multi-GPU is required within a single replica
+    // Tensor parallelism is only required when the *model* doesn't fit on a
+    // single GPU. If it fits but throughput demands more, that's just data-
+    // parallel replicas — non-TP cards (4090, 3090, 5090) can serve that.
     const gpusNeeded = Math.max(gpusThroughput, gpusVram);
-    if (gpusNeeded > 1 && !gpu.tp_capable) continue;
+    if (gpusVram > 1 && !gpu.tp_capable) continue;
 
     const totalGpus = gpusNeeded * replicas;
     const price = getGpuPrice(gpu, pricingTier);
