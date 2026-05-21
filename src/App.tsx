@@ -841,6 +841,9 @@ export default function App() {
                 onSelect={(model, provider) => { setApiModel(model); setApiProvider(provider); }}
                 selfHostedMonthly={costs.selfHostedMonthly}
                 dailyVolume={dailyVolume}
+                opsEnabled={opsEnabled}
+                opsMonthly={opsMonthly}
+                onToggleOps={() => setOpsEnabled(v => !v)}
               />
             </div>
 

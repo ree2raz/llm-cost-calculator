@@ -9,11 +9,14 @@ interface Props {
   onSelect: (model: string, provider: string) => void;
   selfHostedMonthly: number;
   dailyVolume: number;
+  opsEnabled: boolean;
+  opsMonthly: number;
+  onToggleOps: () => void;
 }
 
 const TOP_N = 15;
 
-export default function ApiComparisonTable({ rows, selectedModel, selectedProvider, onSelect, selfHostedMonthly, dailyVolume }: Props) {
+export default function ApiComparisonTable({ rows, selectedModel, selectedProvider, onSelect, selfHostedMonthly, dailyVolume, opsEnabled, opsMonthly, onToggleOps }: Props) {
   const [showAll, setShowAll] = useState(false);
   const [search, setSearch] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -62,6 +65,32 @@ export default function ApiComparisonTable({ rows, selectedModel, selectedProvid
           }
           {' · '}click to compare
         </div>
+      </div>
+
+      {/* TCO baseline + ops toggle */}
+      <div className="flex items-center justify-between mb-2 text-xs">
+        <span style={{ color: 'var(--text-muted)' }}>
+          Self-hosted:{' '}
+          <span className="font-mono" style={{ color: 'var(--text-secondary)' }}>
+            {formatCost(selfHostedMonthly)}/mo
+          </span>
+          {opsEnabled && opsMonthly > 0 && (
+            <span style={{ color: 'var(--accent-warning)' }}>
+              {' '}(+{formatCost(opsMonthly)} ops)
+            </span>
+          )}
+        </span>
+        <button
+          onClick={onToggleOps}
+          className="px-2 py-0.5 rounded text-xs transition-colors"
+          style={{
+            border: `1px solid ${opsEnabled ? 'rgba(254,128,25,0.45)' : 'var(--border)'}`,
+            color: opsEnabled ? 'var(--accent-warning)' : 'var(--text-muted)',
+            backgroundColor: opsEnabled ? 'rgba(254,128,25,0.08)' : 'transparent',
+          }}
+        >
+          {opsEnabled ? '− subtract ops cost' : '+ add ops cost'}
+        </button>
       </div>
 
       {/* Search box */}
