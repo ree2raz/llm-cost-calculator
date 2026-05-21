@@ -578,6 +578,16 @@ export default function App() {
               </div>
 
               {/* GPU row */}
+              {(() => {
+                const qBytes = QUANTIZATIONS.find(x => x.key === quantization)?.bytes ?? 0.5;
+                const confidence = getConfidence(gpuRec.gpu.generation, qBytes, quantization, awqKernel, model.arch === 'moe');
+                const bottleneckLabel = gpuRec.bottleneck === 'vram'
+                  ? `memory-limited (needs ${formatBytes(vramData.totalVRAM)})`
+                  : gpuRec.bottleneck === 'throughput'
+                  ? `speed-limited (${gpuRec.outputTpsRequired.toFixed(0)} tok/s required)`
+                  : `memory + speed balanced`;
+                const whyLine = `Cheapest ${pricingTier.replace('_', ' ')} option · ${bottleneckLabel}`;
+                return (
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold shrink-0"
                   style={{ backgroundColor: '#76B900', color: '#000' }}>
@@ -589,15 +599,18 @@ export default function App() {
                     {gpuRec.count > 1 && (
                       <span className="badge" style={{ backgroundColor: gpuRec.replicas > 1 ? 'var(--accent-info)' : 'var(--accent-danger)', color: 'white' }}>{gpuRec.count}× GPU</span>
                     )}
-                    <span className="badge"
-                      style={{ backgroundColor: gpuRec.bottleneck === 'throughput' ? 'var(--accent-warning)' : gpuRec.bottleneck === 'vram' ? 'var(--accent-danger)' : 'var(--accent-success)', color: 'var(--bg-primary)' }}>
-                      {gpuRec.bottleneck === 'throughput' ? 'Throughput-bound' : gpuRec.bottleneck === 'vram' ? 'VRAM-bound' : 'Balanced'}
-                    </span>
+                    {/* G2: confidence pill — measured/interpolated/unmeasured for this GPU+quant combo */}
+                    <span className="badge" style={{
+                      backgroundColor: confidence === 'measured' ? 'rgba(184,187,38,0.15)' : confidence === 'interpolated' ? 'rgba(250,189,47,0.12)' : 'rgba(254,128,25,0.15)',
+                      color: confidence === 'measured' ? 'var(--accent-success)' : confidence === 'interpolated' ? 'var(--accent-primary)' : 'var(--accent-warning)',
+                    }}>{confidence}</span>
                   </div>
                   <div className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
                     {gpuRec.gpu.vram} GB VRAM · ${gpuRec.price.rate.toFixed(2)}/hr ({gpuRec.price.provider} {pricingTier.replace('_', ' ')}{gpuRec.price.fallback ? ' est.' : ''}) · {gpuRec.count} GPU{gpuRec.count > 1 ? 's' : ''}
                     {gpuRec.replicas > 1 && ` (${gpuRec.baseCount} base × ${gpuRec.replicas} replicas)`}
                   </div>
+                  {/* G3: plain-English why this GPU was picked */}
+                  <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{whyLine}</div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-2xl font-bold font-mono" style={{ color: 'var(--accent-primary)' }}>
@@ -606,6 +619,8 @@ export default function App() {
                   <div className="text-xs" style={{ color: 'var(--text-muted)' }}>/month ({gpuUtilization}% util · {pricingTier.replace('_', ' ')})</div>
                 </div>
               </div>
+                );
+              })()}
 
               {/* Provider price comparison */}
               {providerQuotes.length > 1 && (
@@ -640,10 +655,21 @@ export default function App() {
                     range {formatCost(costs.selfHostedMonthlyLow)}–{formatCost(costs.selfHostedMonthlyHigh)}
                   </div>
                   <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{formatPerRequest(costs.selfHostedPerTranscript)}/request {costs.storageCost > 1 ? `· ${costs.storageCost.toFixed(1)} GB artifact storage` : ''}</div>
-                  {costs.opsMonthly > 0 && (
+                  {costs.opsMonthly > 0 ? (
                     <div className="text-xs mt-1" style={{ color: 'var(--accent-warning)' }}>
                       includes {formatCost(costs.opsMonthly)}/mo ops ({opsFte} FTE × ${(opsCostPerFte / 1000).toFixed(0)}k/yr) · GPU alone {formatCost(costs.selfHostedGpuMonthly)}/mo
                     </div>
+                  ) : (
+                    /* C: ops nudge — shown when self-hosting wins but ops is excluded */
+                    costs.winner === 'self' && (
+                      <div className="text-xs mt-1">
+                        <button onClick={() => setOpsEnabled(true)}
+                          className="underline" style={{ color: 'var(--text-muted)' }}>
+                          + add ops cost
+                        </button>
+                        <span style={{ color: 'var(--text-muted)' }}> to see true TCO</span>
+                      </div>
+                    )
                   )}
                 </div>
                 <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
@@ -671,7 +697,8 @@ export default function App() {
                 </div>
               )}
               <div className="text-xs mb-4" style={{ color: 'var(--fg-muted)', lineHeight: '1.5' }}>
-                Decode efficiency calibrated from benchmarks — <a href="https://llm-bench.rituraj.info" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>measured on L4 + A100</a> using vLLM 0.8.5. Per-GPU generation × quantization × batch lookup. Prefill uses MFU ({mfu}). <span className="ml-1 px-1.5 py-0.5 rounded text-xs font-semibold" style={{ backgroundColor: gpuRec.gpu.generation === 'Ada' || gpuRec.gpu.generation === 'Ampere' ? 'var(--accent-success)' : 'var(--accent-warning)', color: 'var(--bg-primary)' }}>{gpuRec.gpu.generation === 'Ada' || gpuRec.gpu.generation === 'Ampere' ? 'measured' : 'unmeasured'}</span>              </div>
+                Decode efficiency from <a href="https://llm-bench.rituraj.info" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>benchmarks on L4 + A100</a> (vLLM 0.8.5) — badge above shows if this GPU+quant combo is measured, interpolated, or extrapolated.
+              </div>
 
               {gpuRec.count > gpuRec.replicas && (
                 <div className="text-xs p-3 rounded-lg mb-4" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--accent-danger)' }}>
@@ -722,6 +749,7 @@ export default function App() {
                 selectedModel={apiModel}
                 onSelect={setApiModel}
                 selfHostedMonthly={costs.selfHostedMonthly}
+                dailyVolume={dailyVolume}
               />
             </div>
 
@@ -730,7 +758,7 @@ export default function App() {
               <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>
                   Break-even Analysis
                 </h2>
-              <BreakEvenChart data={breakEvenData} breakEven={breakEvenVal} />
+              <BreakEvenChart data={breakEvenData} breakEven={breakEvenVal} currentVolume={dailyVolume} />
               <div className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
                 Self-hosted cost steps up when throughput demands an additional GPU. Hover for details.
               </div>

@@ -7,9 +7,10 @@ interface Props {
   selectedModel: string;
   onSelect: (model: string) => void;
   selfHostedMonthly: number;
+  dailyVolume: number;
 }
 
-export default function ApiComparisonTable({ rows, selectedModel, onSelect, selfHostedMonthly }: Props) {
+export default function ApiComparisonTable({ rows, selectedModel, onSelect, selfHostedMonthly, dailyVolume }: Props) {
   const [showAll, setShowAll] = useState(false);
   const TOP_N = 10;
 
@@ -46,7 +47,7 @@ export default function ApiComparisonTable({ rows, selectedModel, onSelect, self
               <th className="text-left font-medium py-2 pr-2">Provider</th>
               <th className="text-right font-medium py-2 pr-2">$/mo</th>
               <th className="text-right font-medium py-2 pr-2" title="Per-request cost. Switches to per-1k requests when below $0.0001/req.">$/request</th>
-              <th className="text-right font-medium py-2">vs self-hosted</th>
+              <th className="text-right font-medium py-2" title="Daily volume at which self-hosting becomes cheaper than this API option">self-host beats at</th>
             </tr>
           </thead>
           <tbody>
@@ -54,8 +55,12 @@ export default function ApiComparisonTable({ rows, selectedModel, onSelect, self
               const isSelected = row.model === selectedModel;
               const isCheapest = row.model === cheapest.model;
               const rank = rows.findIndex(r => r.model === row.model) + 1;
-              const delta = selfHostedMonthly > 0 ? (row.monthly - selfHostedMonthly) / selfHostedMonthly * 100 : 0;
-              const apiWins = row.monthly < selfHostedMonthly;
+              // Volume at which self-hosted becomes cheaper than this API row (linear approx, no GPU stepping)
+              const beVol = row.monthly > 0 && selfHostedMonthly > 0
+                ? Math.round(selfHostedMonthly * dailyVolume / row.monthly)
+                : null;
+              const fmtBe = (v: number) => v >= 1_000_000 ? '>1M/day' : v >= 1000 ? `${(v / 1000).toFixed(1)}k/day` : `${v}/day`;
+              const alreadyPast = beVol !== null && dailyVolume >= beVol;
               return (
                 <tr key={row.model}
                   onClick={() => onSelect(row.model)}
@@ -89,8 +94,8 @@ export default function ApiComparisonTable({ rows, selectedModel, onSelect, self
                   <td className="py-2 pr-2 text-right font-mono" style={{ color: 'var(--text-primary)' }}>{formatCost(row.monthly)}</td>
                   <td className="py-2 pr-2 text-right font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{formatPerRequest(row.perRequest)}</td>
                   <td className="py-2 text-right font-mono text-xs"
-                    style={{ color: apiWins ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
-                    {selfHostedMonthly > 0 ? `${apiWins ? '−' : '+'}${Math.abs(delta).toFixed(0)}%` : '—'}
+                    style={{ color: alreadyPast ? 'var(--accent-success)' : beVol && beVol > 1_000_000 ? 'var(--text-muted)' : 'var(--text-secondary)' }}>
+                    {beVol === null ? '—' : alreadyPast ? '✓ now' : fmtBe(beVol)}
                   </td>
                 </tr>
               );

@@ -4,9 +4,10 @@ import type { BreakEvenPoint } from '../lib/calculations';
 interface BreakEvenChartProps {
   data: BreakEvenPoint[];
   breakEven: number | null;
+  currentVolume: number;
 }
 
-export default function BreakEvenChart({ data, breakEven }: BreakEvenChartProps) {
+export default function BreakEvenChart({ data, breakEven, currentVolume }: BreakEvenChartProps) {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; visible: boolean; data: BreakEvenPoint | null }>({
     x: 0, y: 0, visible: false, data: null,
   });
@@ -170,6 +171,28 @@ export default function BreakEvenChart({ data, breakEven }: BreakEvenChartProps)
             </text>
           </>
         )}
+
+        {/* "You are here" marker for current daily volume */}
+        {currentVolume > 0 && currentVolume <= maxVolume && (() => {
+          const cx = xScale(currentVolume);
+          // Offset label if too close to break-even line
+          const tooClose = breakEven && Math.abs(cx - xScale(breakEven)) < 40;
+          const labelX = tooClose ? cx - 18 : cx;
+          return (
+            <g>
+              <line x1={cx} y1={padding.top} x2={cx} y2={height - padding.bottom}
+                stroke="var(--text-muted)" strokeWidth={1} strokeDasharray="3 3" opacity={0.6} />
+              <polygon
+                points={`${cx},${height - padding.bottom + 3} ${cx - 5},${height - padding.bottom + 10} ${cx + 5},${height - padding.bottom + 10}`}
+                fill="var(--text-muted)" opacity={0.7}
+              />
+              <text x={labelX} y={height - padding.bottom + 20} textAnchor="middle"
+                fontSize="9" fill="var(--text-muted)" opacity={0.9}>
+                you
+              </text>
+            </g>
+          );
+        })()}
 
         {/* Legend */}
         <g transform={`translate(${width - padding.right - 140}, ${padding.top})`}>
