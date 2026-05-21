@@ -344,6 +344,37 @@ export default function App() {
               <Slider label="Input / Output Ratio" value={inputRatio} min={10} max={90} step={5}
                 onChange={setInputRatio} format={v => `${v}% / ${100 - v}%`} />
 
+              {/* Pricing tier — surfaces here so it's never hidden */}
+              <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>GPU Pricing Tier</label>
+                  {pricingTier === 'reserved_1y' && (
+                    <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(184,187,38,0.12)', color: 'var(--accent-success)' }}>12-month commit</span>
+                  )}
+                  {pricingTier === 'spot' && (
+                    <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(251,73,52,0.12)', color: 'var(--accent-danger)' }}>interruptible</span>
+                  )}
+                </div>
+                <div className="flex gap-1.5">
+                  {([
+                    { key: 'on_demand', label: 'On-demand', sub: '1.0×' },
+                    { key: 'reserved_1y', label: 'Reserved 1yr', sub: '−35%' },
+                    { key: 'spot', label: 'Spot', sub: '−65%' },
+                  ] as const).map(t => (
+                    <button key={t.key} onClick={() => setPricingTier(t.key)}
+                      className="flex-1 py-1.5 rounded text-xs font-medium transition-colors text-center"
+                      style={{
+                        backgroundColor: pricingTier === t.key ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+                        color: pricingTier === t.key ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                        border: `1px solid ${pricingTier === t.key ? 'var(--accent-primary)' : 'var(--border)'}`,
+                      }}>
+                      <div>{t.label}</div>
+                      <div style={{ opacity: 0.75, fontSize: '10px' }}>{t.sub}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
                 Comparing against <span className="font-semibold" style={{ color: 'var(--accent-primary)' }}>{apiModel}</span>. Pick a different API in the comparison table on the right →
               </div>
@@ -356,15 +387,6 @@ export default function App() {
                   Show engineering details
                 </summary>
                 <div className="mt-4 space-y-4">
-                  <div>
-                    <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>GPU Pricing Tier</label>
-                    <select value={pricingTier} onChange={e => setPricingTier(e.target.value)} className="gruv-input">
-                      <option value="on_demand">On-Demand (1.0×)</option>
-                      <option value="reserved_1y">Reserved 1-Year (0.65×)</option>
-                      <option value="spot">Spot / Community (0.35×)</option>
-                    </select>
-                  </div>
-
                   <Slider label="Peak Factor (burst multiplier)" value={peakFactor} min={1.0} max={5.0} step={0.5}
                     onChange={setPeakFactor} format={v => `${v}×`} />
                   <div className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>3× for 9-to-5, 1.5× for 24/7 global</div>
@@ -453,6 +475,36 @@ export default function App() {
 
           {/* RIGHT: Outputs (8 cols) */}
           <div className="lg:col-span-8 space-y-5 order-first lg:order-none">
+            {/* Answer-first verdict banner */}
+            {(() => {
+              const fmtVol = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v);
+              const winnerLabel = costs.winner === 'self' ? 'Self-hosting' : 'API';
+              const loserLabel = costs.winner === 'self' ? 'API' : 'self-hosting';
+              const headline = `${winnerLabel} saves ${formatCost(costs.savings)}/mo at ${dailyVolume.toLocaleString()} req/day`;
+              const sub = breakEvenVal
+                ? costs.winner === 'self'
+                  ? `${loserLabel} becomes cheaper below ${fmtVol(breakEvenVal)} req/day`
+                  : `${loserLabel} wins above ${fmtVol(breakEvenVal)} req/day`
+                : costs.winner === 'self'
+                  ? 'Self-hosting wins at every volume for this model + tier'
+                  : 'API wins at every volume — scale up before self-hosting';
+              const accent = costs.winner === 'self' ? 'var(--accent-success)' : 'var(--accent-info)';
+              return (
+                <div className="gruv-card px-5 py-4" style={{ borderLeft: `3px solid ${accent}` }}>
+                  <div className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+                    {headline}
+                  </div>
+                  <div className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                    {sub}
+                    <span className="ml-3 text-xs font-mono px-1.5 py-0.5 rounded"
+                      style={{ backgroundColor: `${accent}22`, color: accent }}>
+                      {costs.savingsPercent.toFixed(0)}% cheaper
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Infrastructure & Cost */}
             <div className="gruv-card p-5">
               <div className="flex items-center justify-between mb-4">
