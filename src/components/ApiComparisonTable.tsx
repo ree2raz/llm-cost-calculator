@@ -80,17 +80,33 @@ export default function ApiComparisonTable({ rows, selectedModel, selectedProvid
             </span>
           )}
         </span>
-        <button
-          onClick={onToggleOps}
-          className="px-2 py-0.5 rounded text-xs transition-colors"
-          style={{
-            border: `1px solid ${opsEnabled ? 'rgba(254,128,25,0.45)' : 'var(--border)'}`,
-            color: opsEnabled ? 'var(--accent-warning)' : 'var(--text-muted)',
-            backgroundColor: opsEnabled ? 'rgba(254,128,25,0.08)' : 'transparent',
-          }}
-        >
-          {opsEnabled ? '− subtract ops cost' : '+ add ops cost'}
-        </button>
+        {opsEnabled ? (
+          <button
+            onClick={onToggleOps}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: 'rgba(254,128,25,0.18)',
+              border: '1px solid rgba(254,128,25,0.55)',
+              color: 'var(--accent-secondary)',
+            }}
+            title="Click to remove ops overhead"
+          >
+            ops included
+            <span style={{ fontSize: '11px', fontWeight: 700 }}>✕</span>
+          </button>
+        ) : (
+          <button
+            onClick={onToggleOps}
+            className="px-2 py-0.5 rounded text-xs transition-colors"
+            style={{
+              border: '1px solid var(--border)',
+              color: 'var(--text-muted)',
+              backgroundColor: 'transparent',
+            }}
+          >
+            + add ops cost
+          </button>
+        )}
       </div>
 
       {/* Search box */}
