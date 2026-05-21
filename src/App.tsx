@@ -26,8 +26,8 @@ export default function App() {
   // State
   // Default state — Gemma 4 26B MoE, realistic production traffic, on-demand pricing
   const DEFAULT_STATE = {
-    family: 'gemma4',
-    variant: 'Gemma 4-26B-A4B MoE (est.)',
+    family: 'qwen35',
+    variant: 'Qwen3.5-27B',
     quantization: 'q4_k_m',
     contextLength: 8192,
     concurrent: 8,
