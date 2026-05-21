@@ -23,9 +23,9 @@ These compound. Qwen3-32B with avg 12K sessions, 64K context window, 8 concurren
 
 ## Features
 
-- **49 model variants** across 9 families: Qwen3, Qwen3.5, Qwen3.6, Gemma 3, Gemma 4, Phi-4, Mistral, DeepSeek, and custom model entry
-- **38 API pricing models** including GPT-4o, Claude Sonnet 4.6/Opus 4.7/Haiku 4, Gemini 2.5/3, Grok-3, Kimi k1.5, GLM-4, Qwen3 API, and DeepSeek API
-- **10 GPU options** (RTX 3090 through H200 141GB) with `tp_capable` flag — consumer GPUs filtered from multi-GPU configs
+- **39 model variants** across 11 families: Qwen2.5, Qwen3, Qwen3.5, Qwen3.6, Gemma 3, Gemma 4, Phi-4, Mistral, DeepSeek (incl. V4 Flash/Pro and R1 MLA), Llama 3.x, Llama 4 — plus custom model entry
+- **78 API pricing rows** including Claude Sonnet 4.6/Opus 4.7/Haiku 4, GPT-5.4 / GPT-5.4 mini / GPT-4o, Gemini 3.1 Flash/Pro, Grok-3, Kimi K2, GLM, MiniMax, MiMo, Qwen3 API, DeepSeek API, and open-weight rows via Together / DeepInfra / Fireworks / OpenRouter
+- **11 GPU options** (RTX 3090, 4090, 5090, L4, A10G, L40S, A100 40/80GB, H100 80GB, H200 141GB, B200) with `tp_capable` flag — non-TP cards still allowed for data-parallel scaling when the model fits on one card
 - **Architecture-aware VRAM**: MHA (×16 heads), GQA (×4–8 heads), MLA (~50× compression), MoE (total params for VRAM, active for compute)
 - **Separate weight quantization** (FP16, Q8, Q4) and **KV cache precision** (FP16, FP8, INT4)
 - **Throughput model**: prefill compute-bound (quantization invariant), decode bandwidth-bound (quantization helps)
@@ -51,6 +51,7 @@ All prices May 2026. GPU costs from RunPod and Lambda; API costs from OpenRouter
 - **Vite + TypeScript + React 18** — pre-compiled bundle, no in-browser JSX compilation
 - **Tailwind CSS** with Gruvbox theme (dark/light, persisted to localStorage)
 - **All math is pure TypeScript** in `src/lib/calculations.ts` — no runtime dependencies for computation
+- **Vitest unit tests** (`src/lib/__tests__/calculations.test.ts`) — 71 tests pinning the cost / GPU-recommendation math with exact-value assertions
 - **Static deployment** — GitHub Pages, no backend
 
 ## Development
@@ -61,6 +62,9 @@ npm run dev        # Vite dev server (localhost:5173)
 npm run build      # Production build → docs/
 npm run preview    # Preview production build
 npm run typecheck  # TypeScript --noEmit
+npm test           # Vitest run (calculations test suite)
+npm run test:watch # Vitest in watch mode
+npm run test:ui    # Vitest browser UI
 ```
 
 ## Deployment
