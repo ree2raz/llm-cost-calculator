@@ -299,6 +299,7 @@ export const API_PRICING: APIPricing[] = [
   // ── Proprietary models (single-source, no alternatives) ──────────────────
   // OpenAI
   { model: 'GPT-5.4',              provider: 'OpenAI',    input: 2.50,  output: 15.00, cache: 0.50, path: 'proprietary', notes: '500K context' },
+  { model: 'GPT-5.4 mini',         provider: 'OpenAI',    input: 0.40,  output: 1.60,  cache: 0.50, path: 'proprietary' },
   { model: 'GPT-4o',               provider: 'OpenAI',    input: 2.50,  output: 10.00, cache: 0.50, path: 'proprietary' },
   { model: 'GPT-4o-mini',          provider: 'OpenAI',    input: 0.15,  output: 0.60,  cache: 0.50, path: 'proprietary' },
   // Anthropic

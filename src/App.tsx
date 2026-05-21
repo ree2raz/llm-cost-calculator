@@ -50,7 +50,7 @@ export default function App() {
   const [avgTokens, setAvgTokens] = useState(DEFAULT_STATE.avgTokens);
   const [inputRatio, setInputRatio] = useState(DEFAULT_STATE.inputRatio);
   const [customParams, setCustomParams] = useState(7);
-  const [apiModel, setApiModel] = useState('GPT-4o');
+  const [apiModel, setApiModel] = useState('GPT-5.4 mini');
   const [apiProvider, setApiProvider] = useState('OpenAI');
   const [cacheHitRatio, setCacheHitRatio] = useState(0);
   const [gpuUtilization, setGpuUtilization] = useState(85);
@@ -257,7 +257,7 @@ export default function App() {
     setFamily(d.family); setVariant(d.variant); setQuantization(d.quantization);
     setContextLength(d.contextLength); setConcurrent(d.concurrent); setDailyVolume(d.dailyVolume);
     setAvgTokens(d.avgTokens); setInputRatio(d.inputRatio); setCustomParams(7);
-    setApiModel('GPT-4o'); setApiProvider('OpenAI'); setCacheHitRatio(0); setGpuUtilization(85);
+    setApiModel('GPT-5.4 mini'); setApiProvider('OpenAI'); setCacheHitRatio(0); setGpuUtilization(85);
     setBatchEnabled(false); setKvDtype('fp16'); setReplicaCount(d.replicaCount);
     setPeakFactor(d.peakFactor); setPricingTier(d.pricingTier); setMfu(d.mfu);
     setOpsEnabled(false); setOpsFte(0.5); setOpsCostPerFte(150000);
