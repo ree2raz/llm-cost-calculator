@@ -797,7 +797,9 @@ export default function App() {
 
               {gpuRec.count > gpuRec.replicas && (
                 <div className="text-xs p-3 rounded-lg mb-4" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--accent-danger)' }}>
-                  Multi-GPU inference required — tensor parallelism adds communication overhead and engineering complexity.
+                  {gpuRec.gpusVram > 1
+                    ? 'Tensor parallelism required — model exceeds a single GPU’s VRAM. Adds inter-GPU communication overhead and engineering complexity.'
+                    : `Data-parallel scaling — model fits on one ${gpuRec.gpu.name}; throughput needs ${gpuRec.baseCount} independent replicas behind a load balancer. No tensor parallelism.`}
                 </div>
               )}
 
