@@ -47,6 +47,7 @@ export default function App() {
   const [opsEnabled, setOpsEnabled] = useState(false);
   const [opsFte, setOpsFte] = useState(0.5);
   const [opsCostPerFte, setOpsCostPerFte] = useState(150000);
+  const [showEngineering, setShowEngineering] = useState(false);
   const [resetKey, setResetKey] = useState(0);
 
   const opsMonthly = opsEnabled ? (opsFte * opsCostPerFte) / 12 : 0;
@@ -254,13 +255,11 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT: Inputs (4 cols) */}
-          <div className="lg:col-span-4 space-y-5 order-last lg:order-none">
-            {/* Model & Deployment */}
-            <div className="gruv-card p-5">
-              <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>
-                Model & Deployment
-              </h2>
+          <div className="lg:col-span-4 space-y-4 order-last lg:order-none">
 
+            {/* Card 1: Model */}
+            <div className="gruv-card p-5">
+              <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>Model</h2>
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Model Family</label>
                 <select value={family}
@@ -273,8 +272,7 @@ export default function App() {
                     ))}
                 </select>
               </div>
-
-              <div className="mb-4">
+              <div>
                 <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Variant</label>
                 <select value={variant} onChange={e => setVariant(e.target.value)} className="gruv-input">
                   {MODELS[family].variants.map(v => (
@@ -284,9 +282,8 @@ export default function App() {
                   ))}
                 </select>
               </div>
-
               {family === 'custom' && (
-                <div className="mb-4">
+                <div className="mt-4">
                   <div className="flex justify-between items-center mb-1.5">
                     <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Parameter Count (Billions)</label>
                     <span className="text-sm font-mono font-semibold" style={{ color: 'var(--accent-primary)' }}>{customParams}B</span>
@@ -299,28 +296,11 @@ export default function App() {
                   </div>
                 </div>
               )}
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Weight Quantization</label>
-                <select value={quantization} onChange={e => setQuantization(e.target.value)} className="gruv-input">
-                  {QUANTIZATIONS.map(q => (
-                    <option key={q.key} value={q.key}>{q.label} ({q.bytes} bytes/param)</option>
-                  ))}
-                </select>
-              </div>
-
-              <Slider label="Context Length" value={contextLength} min={2048} max={model.context} step={2048}
-                onChange={setContextLength} format={formatTokens} />
-              <Slider label="Concurrent Requests" value={concurrent} min={1} max={64} step={1}
-                onChange={setConcurrent} format={v => `${v} req`} />
             </div>
 
-            {/* Traffic & API */}
+            {/* Card 2: Traffic */}
             <div className="gruv-card p-5">
-              <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>
-                Traffic & API
-              </h2>
-
+              <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>Traffic</h2>
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-1.5">
                   <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Requests / Day</label>
@@ -330,21 +310,20 @@ export default function App() {
                   onChange={e => setDailyVolume(Math.max(1, Number(e.target.value)))}
                   className="gruv-input" />
               </div>
-
-              <div className="mb-4">
+              <div className="mb-1">
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Avg Tokens per Request</label>
-                  <span className="text-sm font-mono font-semibold" style={{ color: 'var(--accent-primary)' }}>{formatTokens(avgTokens)}</span>
+                  <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Avg Request Size</label>
+                  <span className="text-sm font-mono font-semibold" style={{ color: 'var(--accent-primary)' }}>{formatTokens(avgTokens)} tokens</span>
                 </div>
                 <input type="number" min={1} max={128000} value={avgTokens}
                   onChange={e => setAvgTokens(Math.max(1, Number(e.target.value)))}
                   className="gruv-input" />
+                <div className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                  short chat ≈ 500 · customer support ≈ 1,500 · doc summary ≈ 8,000
+                </div>
               </div>
 
-              <Slider label="Input / Output Ratio" value={inputRatio} min={10} max={90} step={5}
-                onChange={setInputRatio} format={v => `${v}% / ${100 - v}%`} />
-
-              {/* Pricing tier — surfaces here so it's never hidden */}
+              {/* GPU Pricing Tier */}
               <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>GPU Pricing Tier</label>
@@ -376,23 +355,138 @@ export default function App() {
               </div>
 
               <div className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                Comparing against <span className="font-semibold" style={{ color: 'var(--accent-primary)' }}>{apiModel}</span>. Pick a different API in the comparison table on the right →
+                Comparing against <span className="font-semibold" style={{ color: 'var(--accent-primary)' }}>{apiModel}</span>. Pick a different API in the comparison table →
               </div>
             </div>
 
-            {/* Engineering details (collapsed by default) */}
+            {/* Card 3: Cost Options — visible, plain-English levers */}
             <div className="gruv-card p-5">
-              <details>
-                <summary className="text-sm font-semibold uppercase tracking-wider cursor-pointer" style={{ color: 'var(--text-muted)' }}>
-                  Show engineering details
-                </summary>
-                <div className="mt-4 space-y-4">
-                  <Slider label="Peak Factor (burst multiplier)" value={peakFactor} min={1.0} max={5.0} step={0.5}
+              <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>Cost Options</h2>
+
+              {/* Batch API */}
+              <div className="pb-4 mb-4 border-b" style={{ borderColor: 'var(--border)' }}>
+                <label className="flex items-center justify-between cursor-pointer mb-1.5">
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    Batch API
+                    {batchEnabled && <span className="ml-2 text-xs font-normal px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(184,187,38,0.12)', color: 'var(--accent-success)' }}>−50%</span>}
+                  </span>
+                  <input type="checkbox" checked={batchEnabled}
+                    onChange={e => setBatchEnabled(e.target.checked)}
+                    className="w-5 h-5 rounded cursor-pointer" style={{ accentColor: 'var(--accent-primary)' }} />
+                </label>
+                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Results in up to 24 hrs — halves API cost. Best for reports, embeddings, async jobs.
+                </div>
+              </div>
+
+              {/* Prompt Caching */}
+              <div className="pb-4 mb-4 border-b" style={{ borderColor: 'var(--border)' }}>
+                <Slider label="Prompt Caching" value={cacheHitRatio} min={0} max={90} step={5}
+                  onChange={setCacheHitRatio} format={v => v === 0 ? 'None' : `${v}%`} />
+                <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  {cacheHitRatio === 0
+                    ? 'Set above 0 if requests share a long system prompt or document.'
+                    : `~${Math.round((1 - costs.cacheMult) * 100)}% discount on repeated input tokens.`}
+                </div>
+              </div>
+
+              {/* Ops overhead */}
+              <div>
+                <label className="flex items-center justify-between cursor-pointer mb-1.5">
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    Add ops cost to self-hosted
+                    {opsEnabled && <span className="ml-2 text-xs font-normal px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(251,73,52,0.12)', color: 'var(--accent-danger)' }}>+{formatCost(opsMonthly)}/mo</span>}
+                  </span>
+                  <input type="checkbox" checked={opsEnabled}
+                    onChange={e => setOpsEnabled(e.target.checked)}
+                    className="w-5 h-5 rounded cursor-pointer" style={{ accentColor: 'var(--accent-primary)' }} />
+                </label>
+                <div className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+                  {opsEnabled
+                    ? `Engineering time to manage infra — ${opsFte} FTE × $${(opsCostPerFte / 1000).toFixed(0)}k/yr.`
+                    : 'Managing self-hosted infra takes real engineering time. Excluded by default.'}
+                </div>
+                {opsEnabled && (
+                  <div className="space-y-3">
+                    <Slider label="Engineering FTE" value={opsFte} min={0.25} max={2} step={0.25}
+                      onChange={setOpsFte} format={v => `${v} FTE`} />
+                    <div>
+                      <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Loaded cost / FTE</label>
+                      <select value={opsCostPerFte} onChange={e => setOpsCostPerFte(Number(e.target.value))} className="gruv-input">
+                        <option value={100000}>Junior — $100k / yr</option>
+                        <option value={150000}>Mid — $150k / yr</option>
+                        <option value={200000}>Senior — $200k / yr</option>
+                        <option value={300000}>Staff — $300k / yr</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Card 4: Technical Assumptions — always shows active values, expandable */}
+            <div className="gruv-card overflow-hidden">
+              <button
+                onClick={() => setShowEngineering(s => !s)}
+                className="w-full px-5 py-4 flex items-start justify-between gap-3 text-left transition-colors"
+                style={{ backgroundColor: 'transparent' }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                    Technical assumptions
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      quantization.toUpperCase(),
+                      `${formatTokens(contextLength)} ctx`,
+                      `${concurrent} concurrent`,
+                      `${inputRatio}/${100 - inputRatio} in/out`,
+                      gpuUtilization !== 85 ? `${gpuUtilization}% util` : null,
+                      replicaCount > 1 ? `${replicaCount}× replicas` : null,
+                    ].filter(Boolean).map(chip => (
+                      <span key={chip as string} className="px-2 py-0.5 rounded-full text-xs font-mono"
+                        style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-xs font-medium shrink-0 flex items-center gap-1 mt-0.5"
+                  style={{ color: 'var(--accent-primary)' }}>
+                  <span>{showEngineering ? 'collapse' : 'customize'}</span>
+                  <span style={{ fontSize: '9px' }}>{showEngineering ? '▲' : '▼'}</span>
+                </div>
+              </button>
+
+              {showEngineering && (
+                <div className="px-5 pb-5 pt-1 space-y-4 border-t" style={{ borderColor: 'var(--border)' }}>
+                  <div className="pt-2">
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Weight Quantization</label>
+                    <select value={quantization} onChange={e => setQuantization(e.target.value)} className="gruv-input">
+                      {QUANTIZATIONS.map(q => (
+                        <option key={q.key} value={q.key}>{q.label} ({q.bytes} bytes/param)</option>
+                      ))}
+                    </select>
+                    <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Lower = less VRAM needed, slightly reduced quality</div>
+                  </div>
+
+                  <Slider label="Context Length" value={contextLength} min={2048} max={model.context} step={2048}
+                    onChange={setContextLength} format={formatTokens} />
+
+                  <Slider label="Concurrent Requests" value={concurrent} min={1} max={64} step={1}
+                    onChange={setConcurrent} format={v => `${v} req`} />
+
+                  <Slider label="Input / Output Ratio" value={inputRatio} min={10} max={90} step={5}
+                    onChange={setInputRatio} format={v => `${v}% / ${100 - v}%`} />
+
+                  <Slider label="Traffic Spikes (peak factor)" value={peakFactor} min={1.0} max={5.0} step={0.5}
                     onChange={setPeakFactor} format={v => `${v}×`} />
                   <div className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>3× for 9-to-5, 1.5× for 24/7 global</div>
 
                   <div>
-                    <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>High Availability Replicas</label>
+                    <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Redundancy (replicas)</label>
                     <input type="number" min={1} max={8} value={replicaCount}
                       onChange={e => setReplicaCount(Math.max(1, Math.min(8, parseInt(e.target.value) || 1)))}
                       className="gruv-input" />
@@ -406,37 +500,6 @@ export default function App() {
                   <Slider label="GPU Utilization" value={gpuUtilization} min={20} max={100} step={5}
                     onChange={setGpuUtilization} format={v => `${v}%`} />
                   <div className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>Cost inflated ×{parseFloat((1 / (gpuUtilization / 100)).toFixed(2))} at {gpuUtilization}% util</div>
-
-                  {/* Ops overhead — engineering time as honest self-hosted cost */}
-                  <div className="pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
-                    <label className="flex items-center justify-between cursor-pointer mb-2">
-                      <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Include ops overhead</span>
-                      <input type="checkbox" checked={opsEnabled}
-                        onChange={e => setOpsEnabled(e.target.checked)}
-                        className="w-5 h-5 rounded cursor-pointer" style={{ accentColor: 'var(--accent-primary)' }} />
-                    </label>
-                    <div className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
-                      Engineering FTE × loaded cost — added to self-hosted only.
-                    </div>
-                    {opsEnabled && (
-                      <div className="space-y-3">
-                        <Slider label="Engineering FTE" value={opsFte} min={0.25} max={2} step={0.25}
-                          onChange={setOpsFte} format={v => `${v} FTE`} />
-                        <div>
-                          <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Loaded cost / FTE</label>
-                          <select value={opsCostPerFte} onChange={e => setOpsCostPerFte(Number(e.target.value))} className="gruv-input">
-                            <option value={100000}>Junior — $100k / yr</option>
-                            <option value={150000}>Mid — $150k / yr</option>
-                            <option value={200000}>Senior — $200k / yr</option>
-                            <option value={300000}>Staff — $300k / yr</option>
-                          </select>
-                        </div>
-                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                          Adds {formatCost(opsMonthly)}/mo to self-hosted ({opsFte} FTE × ${(opsCostPerFte / 1000).toFixed(0)}k/yr).
-                        </div>
-                      </div>
-                    )}
-                  </div>
 
                   {quantization === 'awq4' && gpuRec.gpu.generation !== 'Ada' && (
                     <div>
@@ -457,19 +520,8 @@ export default function App() {
                       ))}
                     </select>
                   </div>
-
-                  <Slider label="API Cache Hit Ratio" value={cacheHitRatio} min={0} max={90} step={5}
-                    onChange={setCacheHitRatio} format={v => `${v}%`} />
-                  <div className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>Input tokens cached at {Math.round(costs.cacheMult * 100)}% of base price</div>
-
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>API Batch Processing</span>
-                    <input type="checkbox" checked={batchEnabled}
-                      onChange={e => setBatchEnabled(e.target.checked)}
-                      className="w-5 h-5 rounded cursor-pointer" style={{ accentColor: 'var(--accent-primary)' }} />
-                  </label>
                 </div>
-              </details>
+              )}
             </div>
           </div>
 
