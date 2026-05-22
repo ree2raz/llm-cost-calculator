@@ -28,6 +28,7 @@ const GEMMA_27B = MODELS['gemma3'].variants.find(v => v.name === 'Gemma 3-27B')!
 const GEMMA_12B_MHA = MODELS['gemma3'].variants.find(v => v.name === 'Gemma 3-12B')!;
 const PHI_4 = MODELS['phi4'].variants.find(v => v.name === 'Phi-4')!;
 const DEEPSEEK_R1 = MODELS['deepseek'].variants.find(v => v.name === 'DeepSeek R1')!;
+const DEEPSEEK_V4_FLASH = MODELS['deepseek'].variants.find(v => v.name === 'DeepSeek V4 Flash')!;
 const LLAMA4_SCOUT = MODELS['llama4'].variants.find(v => v.name === 'Llama 4 Scout 109B (est.)')!;
 
 const GPU = (name: string): GPU => {
@@ -68,9 +69,17 @@ describe('calculateKVPerToken', () => {
     expect(calculateKVPerToken(m, 2)).toBe(1179648);
   });
 
-  it('MLA path uses kv_dim, not head_dim — DeepSeek R1 fp16', () => {
-    // 2 * 61 * 512 * 2 = 124,928
-    expect(calculateKVPerToken(DEEPSEEK_R1, 2)).toBe(124928);
+  it('MLA path uses kv_dim + rope_dim, not head_dim — DeepSeek R1 fp16', () => {
+    // DeepSeek-V2 §2.1.3: per-token cache = layers × (d_c + d_h^R) × bytes
+    // 61 * (512 + 64) * 2 = 70,272
+    expect(calculateKVPerToken(DEEPSEEK_R1, 2)).toBe(70272);
+  });
+
+  it('mqa_shared path uses layers × head_dim — DeepSeek V4 Flash fp16', () => {
+    // HF transformers v5.9 deepseek_v4 config: shared K=V tensor, head_dim=512,
+    // num_hidden_layers=43. Per-token cache = layers × head_dim × bytes.
+    // 43 * 512 * 2 = 44,032
+    expect(calculateKVPerToken(DEEPSEEK_V4_FLASH, 2)).toBe(44032);
   });
 
   it('Phi-4 (10 kv_heads, 40 heads) fp16', () => {
@@ -485,19 +494,19 @@ describe('generateBreakEvenData', () => {
 describe('findBreakEven', () => {
   it('finds crossing on synthetic curve (linear API vs flat self-host)', () => {
     const data = [
-      { volume: 0, selfHosted: 100, api: 0, gpuCount: 1 },
-      { volume: 100, selfHosted: 100, api: 50, gpuCount: 1 },
-      { volume: 200, selfHosted: 100, api: 100, gpuCount: 1 }, // crossing here
-      { volume: 300, selfHosted: 100, api: 150, gpuCount: 1 },
+      { volume: 0, selfHosted: 100, api: 0, gpuCount: 1, gpuName: "X" },
+      { volume: 100, selfHosted: 100, api: 50, gpuCount: 1, gpuName: "X" },
+      { volume: 200, selfHosted: 100, api: 100, gpuCount: 1, gpuName: "X" }, // crossing here
+      { volume: 300, selfHosted: 100, api: 150, gpuCount: 1, gpuName: "X" },
     ];
     expect(findBreakEven(data)).toBe(200);
   });
 
   it('interpolates volume linearly between bracketing points', () => {
     const data = [
-      { volume: 0, selfHosted: 100, api: 0, gpuCount: 1 },
-      { volume: 100, selfHosted: 100, api: 50, gpuCount: 1 },
-      { volume: 200, selfHosted: 100, api: 150, gpuCount: 1 }, // crossing in [100, 200]
+      { volume: 0, selfHosted: 100, api: 0, gpuCount: 1, gpuName: "X" },
+      { volume: 100, selfHosted: 100, api: 50, gpuCount: 1, gpuName: "X" },
+      { volume: 200, selfHosted: 100, api: 150, gpuCount: 1, gpuName: "X" }, // crossing in [100, 200]
     ];
     const be = findBreakEven(data);
     // At v=100 self=100 api=50 (diff -50); at v=200 diff +50 → crossing at v=150
@@ -506,8 +515,8 @@ describe('findBreakEven', () => {
 
   it('returns null when curves never cross', () => {
     const data = [
-      { volume: 0, selfHosted: 100, api: 200, gpuCount: 1 },
-      { volume: 100, selfHosted: 100, api: 300, gpuCount: 1 },
+      { volume: 0, selfHosted: 100, api: 200, gpuCount: 1, gpuName: "X" },
+      { volume: 100, selfHosted: 100, api: 300, gpuCount: 1, gpuName: "X" },
     ];
     expect(findBreakEven(data)).toBe(null);
   });

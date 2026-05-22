@@ -23,16 +23,16 @@ These compound. Qwen3-32B with avg 12K sessions, 64K context window, 8 concurren
 
 ## Features
 
-- **39 model variants** across 11 families: Qwen2.5, Qwen3, Qwen3.5, Qwen3.6, Gemma 3, Gemma 4, Phi-4, Mistral, DeepSeek (incl. V4 Flash/Pro and R1 MLA), Llama 3.x, Llama 4 — plus custom model entry
-- **78 API pricing rows** including Claude Sonnet 4.6/Opus 4.7/Haiku 4, GPT-5.4 / GPT-5.4 mini / GPT-4o, Gemini 3.1 Flash/Pro, Grok-3, Kimi K2, GLM, MiniMax, MiMo, Qwen3 API, DeepSeek API, and open-weight rows via Together / DeepInfra / Fireworks / OpenRouter
-- **11 GPU options** (RTX 3090, 4090, 5090, L4, A10G, L40S, A100 40/80GB, H100 80GB, H200 141GB, B200) with `tp_capable` flag — non-TP cards still allowed for data-parallel scaling when the model fits on one card
-- **Architecture-aware VRAM**: MHA (×16 heads), GQA (×4–8 heads), MLA (~50× compression), MoE (total params for VRAM, active for compute)
-- **Separate weight quantization** (FP16, Q8, Q4) and **KV cache precision** (FP16, FP8, INT4)
-- **Throughput model**: prefill compute-bound (quantization invariant), decode bandwidth-bound (quantization helps)
-- **Pricing tiers**: on-demand (1×), reserved-1y (0.65×), spot (0.35×)
-- **5 production-tuned presets**: Customer Support Bot, Code Assistant, Enterprise RAG, Startup MVP, High-Volume API Replacement
-- **Shareable URL state**: every scenario encodes to query params, shareable by link
-- **Calculation formulas exposed**: "Show calculation formulas" panel renders prefill TPS, decode TPS, KV per token, and VRAM formulas with current inputs substituted
+- 39 model variants across 11 families (Qwen2.5 through Qwen3.6, Gemma 3 and 4, Phi-4, Mistral, DeepSeek including V4 Flash/Pro and R1, Llama 3.x and 4), plus a custom-model entry for anything not on the list
+- 78 API pricing rows: Claude Sonnet 4.6 / Opus 4.7 / Haiku 4, GPT-5.4 family, Gemini 3.1 Flash/Pro, Grok-3, Kimi K2, GLM, MiniMax, MiMo, Qwen3 API, DeepSeek API, and open-weight rows on Together, DeepInfra, Fireworks, OpenRouter
+- 11 GPUs (RTX 3090, 4090, 5090, L4, A10G, L40S, A100 40/80GB, H100 80GB, H200 141GB, B200). Each carries a `tp_capable` flag; non-TP consumer cards are still allowed when the model fits on one of them and only data-parallel replicas are needed
+- VRAM math handles MHA, GQA, MLA (DeepSeek-style compressed KV), shared-K=V MQA (DeepSeek V4), and MoE (total params for memory, active params for compute)
+- Weight quantization (FP16, Q8, Q4) and KV cache precision (FP16, FP8, INT4) are independent inputs
+- Throughput model splits prefill (compute-bound, quantization invariant) from decode (bandwidth-bound, quantization helps)
+- Pricing tiers: on-demand (1×), reserved 1-year (0.65×), spot (0.35×)
+- 5 presets for the workloads I get asked about most: Customer Support Bot, Code Assistant, Enterprise RAG, Startup MVP, High-Volume API Replacement
+- Every scenario is shareable as a URL — paste it into Slack and the recipient sees the same numbers
+- A "Show calculation formulas" panel prints the prefill TPS, decode TPS, KV-per-token, and VRAM formulas with the current inputs already plugged in, so you can sanity-check the number yourself before quoting it
 
 ## Presets
 
@@ -44,7 +44,7 @@ These compound. Qwen3-32B with avg 12K sessions, 64K context window, 8 concurren
 | Startup MVP | Gemma 3-27B Q4 | 16K | Spot | $331/mo (1× A100 40GB) | $17/mo (GPT-4o) | 95% |
 | High-Volume API Replacement | Qwen3-30B-A3B MoE Q4 | 8K | Reserved 1y | $1,200/mo (2× A100 40GB) | $3,000/mo (GPT-4o) | **self-host wins 60%** |
 
-All prices May 2026. GPU costs from RunPod and Lambda; API costs from OpenRouter. Click any preset in the calculator to load it with full parameters.
+Prices are from May 2026. GPU rates pulled from RunPod and Lambda, API rates from OpenRouter. The presets load with full parameters so you can poke at one and see what changes.
 
 ## Tech Stack
 

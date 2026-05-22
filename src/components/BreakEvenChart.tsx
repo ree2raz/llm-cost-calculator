@@ -37,24 +37,67 @@ export default function BreakEvenChart({ data, breakEven, currentVolume }: Break
     `${i === 0 ? 'M' : 'L'} ${xScale(d.volume)} ${yScale(d.api)}`
   ).join(' ');
 
-  // GPU count step boundaries
-  const gpuSteps: { volume: number; endVolume: number; gpuCount: number; cost: number }[] = [];
+  // GPU config segments — group consecutive identical (gpuName, gpuCount).
+  // The recommender can switch GPU type as volume grows, so count alone is
+  // not monotonic; key on the full config tuple instead.
+  type Segment = { volume: number; endVolume: number; gpuCount: number; gpuName: string; cost: number };
+  const segments: Segment[] = [];
   if (data.length > 0) {
-    let prevCount = data[0].gpuCount;
+    const keyOf = (d: BreakEvenPoint) => `${d.gpuName}|${d.gpuCount}`;
+    let prevKey = keyOf(data[0]);
     let startVol = data[0].volume;
     for (let i = 1; i < data.length; i++) {
-      if (data[i].gpuCount !== prevCount) {
-        gpuSteps.push({ volume: startVol, endVolume: data[i].volume, gpuCount: prevCount, cost: data[i - 1].selfHosted });
-        prevCount = data[i].gpuCount;
+      const k = keyOf(data[i]);
+      if (k !== prevKey) {
+        segments.push({
+          volume: startVol, endVolume: data[i].volume,
+          gpuCount: data[i - 1].gpuCount, gpuName: data[i - 1].gpuName,
+          cost: data[i - 1].selfHosted,
+        });
+        prevKey = k;
         startVol = data[i].volume;
       }
     }
-    gpuSteps.push({ volume: startVol, endVolume: data[data.length - 1].volume, gpuCount: prevCount, cost: data[data.length - 1].selfHosted });
+    const last = data[data.length - 1];
+    segments.push({
+      volume: startVol, endVolume: last.volume,
+      gpuCount: last.gpuCount, gpuName: last.gpuName, cost: last.selfHosted,
+    });
   }
+
+  // Suppress labels whose midpoint is closer than this (in viewBox units) to
+  // the previously shown label, so they don't overlap into a soup.
+  const MIN_LABEL_GAP = 55;
+  // Shorten GPU names for tight badges.
+  const shortName = (n: string) => n
+    .replace(/^RTX /, '')
+    .replace(/^NVIDIA /, '')
+    .replace(/ 80GB$/, '')
+    .replace(/ 40GB$/, '')
+    .replace(/ 141GB$/, '');
+  const labeledSegments: (Segment & { midX: number })[] = [];
+  let lastLabelX = -Infinity;
+  for (const s of segments) {
+    const midX = (xScale(s.volume) + xScale(s.endVolume)) / 2;
+    if (midX - lastLabelX >= MIN_LABEL_GAP) {
+      labeledSegments.push({ ...s, midX });
+      lastLabelX = midX;
+    }
+  }
+
+  // If every segment uses the same GPU, drop the name from each badge and
+  // surface it once as a legend chip — cuts visual noise dramatically when
+  // the recommender picks a single card type across the whole volume range.
+  const uniqueGpuNames = Array.from(new Set(segments.map(s => s.gpuName)));
+  const singleGpu = uniqueGpuNames.length === 1 ? uniqueGpuNames[0] : null;
 
   const handleMouseMove = (e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
+    // SVG is rendered responsively (w-full) but coordinates inside use the
+    // fixed viewBox (0..width). Map mouse position from CSS pixels back into
+    // viewBox units before comparing to xScale outputs.
+    const scale = rect.width > 0 ? width / rect.width : 1;
+    const x = (e.clientX - rect.left) * scale;
 
     let closest = data[0];
     let minDist = Infinity;
@@ -66,7 +109,8 @@ export default function BreakEvenChart({ data, breakEven, currentVolume }: Break
       }
     }
 
-    if (minDist < 30) {
+    // Snap radius is in viewBox units (chart is `width` wide in those units).
+    if (minDist < width / 20) {
       setTooltip({
         x: xScale(closest.volume),
         y: Math.min(yScale(closest.selfHosted), yScale(closest.api)) - 10,
@@ -139,17 +183,22 @@ export default function BreakEvenChart({ data, breakEven, currentVolume }: Break
         <path d={selfHostedStepPath} fill="none" stroke="var(--chart-self)" strokeWidth={2.5} />
         <path d={apiPath} fill="none" stroke="var(--chart-api)" strokeWidth={2.5} />
 
-        {/* GPU count annotations */}
-        {gpuSteps.map((step, i) => {
-          const midX = (xScale(step.volume) + xScale(step.endVolume)) / 2;
+        {/* GPU config annotations — deduped + spaced to avoid overlap.
+            When all segments share one GPU, badges drop the name. */}
+        {labeledSegments.map((step, i) => {
+          const label = singleGpu
+            ? `${step.gpuCount}×`
+            : `${step.gpuCount}× ${shortName(step.gpuName)}`;
+          const charW = 5.2;
+          const w = Math.max(28, label.length * charW + 8);
           const y = yScale(step.cost) - 10;
           return (
             <g key={i}>
-              <rect x={midX - 22} y={y - 10} width={44} height={14} rx={3}
-                fill="var(--bg-primary)" fillOpacity={0.85} stroke="var(--border)" strokeWidth={0.5} />
-              <text x={midX} y={y} textAnchor="middle" fontSize="9" fontWeight="600"
+              <rect x={step.midX - w / 2} y={y - 10} width={w} height={14} rx={3}
+                fill="var(--bg-primary)" fillOpacity={0.9} stroke="var(--border)" strokeWidth={0.5} />
+              <text x={step.midX} y={y} textAnchor="middle" fontSize="9" fontWeight="600"
                 fill="var(--chart-self)">
-                {step.gpuCount} GPU{step.gpuCount > 1 ? 's' : ''}
+                {label}
               </text>
             </g>
           );
@@ -200,6 +249,15 @@ export default function BreakEvenChart({ data, breakEven, currentVolume }: Break
           <text x={26} y={4} fontSize="11" fill="var(--text-secondary)">Self-hosted</text>
           <line x1={0} y1={18} x2={20} y2={18} stroke="var(--chart-api)" strokeWidth={2.5} />
           <text x={26} y={22} fontSize="11" fill="var(--text-secondary)">API</text>
+          {singleGpu && (
+            <>
+              <rect x={0} y={32} width={20} height={12} rx={2}
+                fill="var(--bg-primary)" stroke="var(--border)" strokeWidth={0.5} />
+              <text x={26} y={42} fontSize="11" fill="var(--text-secondary)">
+                GPU: {shortName(singleGpu)}
+              </text>
+            </>
+          )}
         </g>
       </svg>
 
@@ -218,7 +276,7 @@ export default function BreakEvenChart({ data, breakEven, currentVolume }: Break
               {tooltip.data.volume >= 1000 ? `${(tooltip.data.volume / 1000).toFixed(1)}k` : tooltip.data.volume} requests/day
             </div>
             <div style={{ color: 'var(--chart-self)' }}>
-              Self-hosted: ${tooltip.data.selfHosted.toFixed(0)}/mo ({tooltip.data.gpuCount} GPU{tooltip.data.gpuCount > 1 ? 's' : ''})
+              Self-hosted: ${tooltip.data.selfHosted.toFixed(0)}/mo ({tooltip.data.gpuCount}× {shortName(tooltip.data.gpuName)})
             </div>
             <div style={{ color: 'var(--chart-api)' }}>
               API: ${tooltip.data.api.toFixed(0)}/mo

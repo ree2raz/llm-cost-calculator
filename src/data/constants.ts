@@ -37,9 +37,16 @@ export interface ModelVariant {
   hidden: number;
   heads: number;
   kv_heads?: number;
+  // Explicit attention head dim. Falls back to hidden/heads when omitted.
+  // Required for models where head_dim is independent of hidden_size
+  // (DeepSeek V4: hidden=4096, heads=64, but head_dim=512).
+  head_dim?: number;
   kv_dim?: number;
   context: number;
-  arch: 'gqa' | 'mha' | 'mla' | 'moe';
+  // 'mqa_shared' = DeepSeek-V4 hybrid attention: single K=V tensor read as
+  // both key and value (HF deepseek_v4: num_key_value_heads=1, shared K=V MQA).
+  // KV cache = layers × head_dim × bytes (no ×2, no ×kv_heads).
+  arch: 'gqa' | 'mha' | 'mla' | 'moe' | 'mqa_shared';
   moe_topk?: number;
 }
 
@@ -260,8 +267,12 @@ export const MODELS: Record<string, ModelFamily> = {
   'deepseek': {
     family: 'DeepSeek',
     variants: [
-      { name: 'DeepSeek V4 Flash', params: 284, active_params: 13, layers: 61, hidden: 7168, heads: 128, kv_heads: 128, context: 1048576, arch: 'mla', kv_dim: 512 },
-      { name: 'DeepSeek V4 Pro', params: 1600, active_params: 49, layers: 61, hidden: 7168, heads: 128, kv_heads: 128, context: 1048576, arch: 'mla', kv_dim: 512 },
+      // V4 abandoned MLA in favor of hybrid local + long-range attention with
+      // shared K=V Multi-Query Attention (HF transformers v5.9 deepseek_v4
+      // config: num_key_value_heads=1, head_dim=512, num_hidden_layers=43).
+      // Per-token KV cache ≈ layers × head_dim × bytes (one shared tensor).
+      { name: 'DeepSeek V4 Flash', params: 284, active_params: 13, layers: 43, hidden: 4096, heads: 64, kv_heads: 1, head_dim: 512, context: 1048576, arch: 'mqa_shared' },
+      { name: 'DeepSeek V4 Pro', params: 1600, active_params: 49, layers: 80, hidden: 6144, heads: 96, kv_heads: 1, head_dim: 512, context: 1048576, arch: 'mqa_shared' },
       { name: 'DeepSeek R1', params: 671, active_params: 37, layers: 61, hidden: 7168, heads: 128, kv_heads: 128, context: 163840, arch: 'mla', kv_dim: 512 },
       { name: 'DeepSeek R1 Distill-Qwen 32B', params: 32, layers: 64, hidden: 5120, heads: 40, kv_heads: 8, context: 32768, arch: 'gqa' },
       { name: 'DeepSeek R1 Distill-Llama 70B', params: 70, layers: 80, hidden: 8192, heads: 64, kv_heads: 8, context: 131072, arch: 'gqa' },

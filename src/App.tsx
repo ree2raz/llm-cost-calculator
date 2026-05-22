@@ -326,6 +326,21 @@ export default function App() {
         </div>
       </header>
 
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs px-3 py-2 rounded-lg"
+          style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+          <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>Work in progress.</span>
+          <span>Still tightening the numbers and formulas. If something looks off, tell me.</span>
+          <span style={{ color: 'var(--text-muted)' }}>Ping me on</span>
+          <a href="https://twitter.com/ree2raz" target="_blank" rel="noopener noreferrer"
+            className="underline hover:no-underline" style={{ color: 'var(--accent-primary)' }}>Twitter</a>
+          <span style={{ color: 'var(--text-muted)' }}>or</span>
+          <a href="https://linkedin.com/in/ree2raz" target="_blank" rel="noopener noreferrer"
+            className="underline hover:no-underline" style={{ color: 'var(--accent-primary)' }}>LinkedIn</a>
+          <span>.</span>
+        </div>
+      </div>
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT: Inputs (4 cols) */}
@@ -792,14 +807,14 @@ export default function App() {
                 </div>
               )}
               <div className="text-xs mb-4" style={{ color: 'var(--fg-muted)', lineHeight: '1.5' }}>
-                Decode efficiency from <a href="https://llm-bench.rituraj.info" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>benchmarks on L4 + A100</a> (vLLM 0.8.5) — badge above shows if this GPU+quant combo is measured, interpolated, or extrapolated.
+                The decode-efficiency number comes from my own <a href="https://llm-bench.rituraj.info" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>L4 + A100 benchmarks</a> on vLLM 0.8.5. The badge above tells you whether this exact GPU+quant pair was measured, interpolated, or extrapolated.
               </div>
 
               {gpuRec.count > gpuRec.replicas && (
                 <div className="text-xs p-3 rounded-lg mb-4" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--accent-danger)' }}>
                   {gpuRec.gpusVram > 1
-                    ? 'Tensor parallelism required — model exceeds a single GPU’s VRAM. Adds inter-GPU communication overhead and engineering complexity.'
-                    : `Data-parallel scaling — model fits on one ${gpuRec.gpu.name}; throughput needs ${gpuRec.baseCount} independent replicas behind a load balancer. No tensor parallelism.`}
+                    ? "Tensor parallelism required. The model doesn't fit on a single GPU's VRAM, so you pay for inter-GPU communication and the engineering work to set it up."
+                    : `Data-parallel only. The model fits on one ${gpuRec.gpu.name}; you need ${gpuRec.baseCount} independent replicas behind a load balancer to hit throughput. No tensor parallelism.`}
                 </div>
               )}
 
@@ -869,29 +884,66 @@ export default function App() {
                   Show calculation formulas
                 </summary>
                 <div className="mt-3 p-4 rounded-lg text-xs font-mono space-y-2" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                  <details>
+                    <summary className="cursor-pointer" style={{ color: 'var(--accent-primary)', fontFamily: 'inherit' }}>
+                      What do these symbols mean? (variable glossary)
+                    </summary>
+                    <div className="mt-2 pl-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1" style={{ color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                      <div><span style={{ color: 'var(--accent-info)' }}>MFU</span> — model FLOPs utilization, i.e. how much of the GPU's peak compute the prefill step actually uses (35–50% in tuned production setups).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>GPU_FP16_TFLOPS</span> — the card's peak dense FP16 throughput, from the spec sheet.</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>active_params</span> — parameters touched per forward pass. Same as total for dense models; smaller than total for MoE (only the routed experts run).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>η (eta)</span> — decode efficiency: real tokens/sec divided by the theoretical bandwidth-bound ceiling. Comes from the L4 / A100 benchmarks shipped with this tool.</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>B</span> — batch size, the number of concurrent requests sharing one GPU step.</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>HBM_GBW</span> — GPU memory bandwidth in GB/s (HBM stands for High-Bandwidth Memory).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>weight_bytes</span> — model weights in bytes after quantization (e.g. Q4 halves FP16).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>KV_per_seq</span> — per-sequence KV cache size for the current context length.</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>layers</span> — number of transformer decoder layers in the model.</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>head_dim</span> — dimension of each attention head (hidden_size ÷ heads, unless the model overrides it).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>kv_heads</span> — number of K/V heads (GQA groups query heads to share fewer KV heads, MHA has one KV head per query head).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>kv_dtype_bytes</span> — bytes per KV element (FP16 = 2, FP8 = 1, INT4 ≈ 0.5).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>d_c</span> — MLA's compressed latent dimension (DeepSeek V2/V3: 512).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>d_h^R</span> — MLA's decoupled RoPE head dimension (DeepSeek V2/V3: 64).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>k</span> — MTP draft tokens proposed per step.</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>α<sub>accept</sub></span> — fraction of MTP drafts the verifier accepts.</div>
+                    </div>
+                  </details>
                   <div>
                     <span style={{ color: 'var(--accent-info)' }}>Prefill TPS</span> = MFU × GPU_FP16_TFLOPS ÷ (2 × active_params)<br />
                     = {(mfu * 100).toFixed(0)}% × {gpuRec.gpu.fp16_tflops} TFLOPS ÷ (2 × {(model.active_params || model.params).toFixed(1)}B)<br />
                     = <span style={{ color: 'var(--accent-success)' }}>{gpuRec.throughput?.prefillTps.toFixed(0)} tok/s</span>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--accent-info)' }}>Decode TPS (aggregate)</span> = B × HBM_GBW ÷ (weight_bytes + B × KV_per_seq)<br />
-                    = {concurrent} × {gpuRec.gpu.hbm_gbps} GB/s ÷ ({formatBytes(gpuRec.throughput?.weightsBytes || 0)} + {concurrent} × {formatBytes(gpuRec.throughput?.kvPerSeqBytes || 0)})<br />
-                    = <span style={{ color: 'var(--accent-success)' }}>{gpuRec.throughput?.decodeTpsAggregate.toFixed(0)} tok/s</span> ({gpuRec.throughput?.decodeTpsPerStream.toFixed(0)} tok/s per stream)
+                    <span style={{ color: 'var(--accent-info)' }}>Decode TPS (aggregate)</span> = η × B × HBM_GBW ÷ (weight_bytes + B × KV_per_seq)<br />
+                    = {((gpuRec.throughput?.decodeEfficiency ?? 1) * 100).toFixed(0)}% × {concurrent} × {gpuRec.gpu.hbm_gbps} GB/s ÷ ({formatBytes(gpuRec.throughput?.weightsBytes || 0)} + {concurrent} × {formatBytes(gpuRec.throughput?.kvPerSeqBytes || 0)})<br />
+                    = <span style={{ color: 'var(--accent-success)' }}>{gpuRec.throughput?.decodeTpsAggregate.toFixed(0)} tok/s</span> ({gpuRec.throughput?.decodeTpsPerStream.toFixed(0)} tok/s per stream)<br />
+                    <span style={{ color: 'var(--text-muted)' }}>η = decode efficiency vs theoretical bandwidth (measured on vLLM v0.8.5; depends on GPU gen, quant, batch size)</span>
                   </div>
                   <div>
                     {model.arch === 'mla' ? (
                       <>
-                        <span style={{ color: 'var(--accent-info)' }}>KV per token (MLA)</span> = 2 × layers × kv_dim × kv_dtype_bytes<br />
-                        = 2 × {model.layers} × {model.kv_dim || 512} × {kvBytes}<br />
+                        <span style={{ color: 'var(--accent-info)' }}>KV per token (MLA)</span> = layers × (d_c + d_h^R) × kv_dtype_bytes<br />
+                        = {model.layers} × ({model.kv_dim || 512} + 64) × {kvBytes}<br />
+                      </>
+                    ) : model.arch === 'mqa_shared' ? (
+                      <>
+                        <span style={{ color: 'var(--accent-info)' }}>KV per token (V4 shared K=V MQA)</span> = layers × head_dim × kv_dtype_bytes<br />
+                        = {model.layers} × {model.head_dim || (model.hidden / model.heads).toFixed(0)} × {kvBytes}<br />
                       </>
                     ) : (
                       <>
                         <span style={{ color: 'var(--accent-info)' }}>KV per token ({model.arch.toUpperCase()})</span> = 2 × layers × kv_heads × head_dim × kv_dtype_bytes<br />
-                        = 2 × {model.layers} × {model.kv_heads || model.heads} × {(model.hidden / model.heads).toFixed(0)} × {kvBytes}<br />
+                        = 2 × {model.layers} × {model.kv_heads || model.heads} × {(model.head_dim || model.hidden / model.heads).toFixed(0)} × {kvBytes}<br />
                       </>
                     )}
                     = <span style={{ color: 'var(--accent-success)' }}>{formatSmallBytes(calculateKVPerToken(model, kvBytes))}/token</span>
+                  </div>
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '6px' }}>
+                    <span style={{ color: 'var(--accent-info)' }}>Decode TPS with MTP</span> = Decode TPS × α<sub>accept</sub> × k<br />
+                    <em>k</em> is how many draft tokens the model proposes per step (usually 2 to 4); <em>α<sub>accept</sub></em> is the fraction the verifier accepts (around 0.7 to 0.85 in production).<br />
+                    For this config with k=2 and α=0.8: <span style={{ color: 'var(--accent-success)' }}>{gpuRec.throughput?.decodeTpsAggregate.toFixed(0)} × 0.8 × 2 ≈ {Math.round((gpuRec.throughput?.decodeTpsAggregate || 0) * 1.6)} tok/s</span>, about 1.6× faster.<br />
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.95em' }}>
+                      Reported speedups as of May 2026: Gemma 4's MTP drafter hits up to 3× (Google AI), Qwen3.6 MTP lands at 1.7–2.4× on llama.cpp, DeepSeek V3/V4's native MTP heads do ~1.8× on SGLang at batch 1. MTP doesn't add weight reads; it hides decode latency behind verification. VRAM and prefill TPS are unchanged. To use this calculator's $/mo with MTP on, divide your required output-tok/s by the speedup factor before reading the GPU count.
+                    </span>
                   </div>
                   <div>
                     <span style={{ color: 'var(--accent-info)' }}>VRAM</span> = weights + KV_cache × concurrent + 15% overhead<br />

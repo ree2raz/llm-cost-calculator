@@ -77,9 +77,19 @@ export function calculateVRAM(
 
   let kvPerToken: number;
   if (model.arch === 'mla') {
-    kvPerToken = 2 * model.layers * (model.kv_dim || 512) * kv.bytes;
+    // DeepSeek-V2 §2.1.3 / V3 tech report: per-token MLA cache is
+    // (d_c + d_h^R) × n_layers — the compressed latent reconstructs both K
+    // and V (no factor of 2), plus a decoupled RoPE head dim (d_h^R = 64).
+    const ropeDim = 64;
+    kvPerToken = model.layers * ((model.kv_dim || 512) + ropeDim) * kv.bytes;
+  } else if (model.arch === 'mqa_shared') {
+    // DeepSeek-V4 hybrid attention: single K=V tensor read as both K and V
+    // (HF transformers v5.9 deepseek_v4: num_key_value_heads=1, shared K=V).
+    // No factor of 2 — the same tensor serves both roles.
+    const headDim = model.head_dim || (model.hidden / model.heads);
+    kvPerToken = model.layers * headDim * kv.bytes;
   } else {
-    const headDim = model.hidden / model.heads;
+    const headDim = model.head_dim || (model.hidden / model.heads);
     const kvHeads = model.kv_heads || model.heads;
     kvPerToken = 2 * model.layers * kvHeads * headDim * kv.bytes;
   }
@@ -106,9 +116,14 @@ export function calculateVRAM(
 
 export function calculateKVPerToken(model: ModelVariant, kvBytes: number): number {
   if (model.arch === 'mla') {
-    return 2 * model.layers * (model.kv_dim || 512) * kvBytes;
+    const ropeDim = 64;
+    return model.layers * ((model.kv_dim || 512) + ropeDim) * kvBytes;
   }
-  const headDim = model.hidden / model.heads;
+  if (model.arch === 'mqa_shared') {
+    const headDim = model.head_dim || (model.hidden / model.heads);
+    return model.layers * headDim * kvBytes;
+  }
+  const headDim = model.head_dim || (model.hidden / model.heads);
   const kvHeads = model.kv_heads || model.heads;
   return 2 * model.layers * kvHeads * headDim * kvBytes;
 }
@@ -124,6 +139,7 @@ export interface ThroughputResult {
   weightsBytes: number;
   kvPerSeqBytes: number;
   bytesReadPerStep: number;
+  decodeEfficiency: number;
 }
 
 // ─── Efficiency Lookup Table ───────────────────────────────────────────────
@@ -132,6 +148,15 @@ export interface ThroughputResult {
 // FP16: Qwen2.5-7B-Instruct, AWQ: Qwen2.5-7B-Instruct-AWQ.
 // Hopper/Blackwell entries extrapolated from Ampere — unmeasured.
 // Interpolation: piecewise linear between measured batch sizes.
+//
+// CONSERVATIVE vs current production (May 2026): vLLM is at v0.21.0 and
+// SGLang ships with FlashMLA (Hopper) hitting 83% of theoretical HBM
+// bandwidth, FlashAttention-3, and native MTP — all well above these
+// Ampere numbers. The table therefore *understates* H100/H200/B200 decode
+// throughput. Engines also commonly run MTP (Gemma 4 MTP drafter ~3×,
+// Qwen3.6 MTP 1.7–2.4×, DeepSeek V3/V4 native MTP heads) which is
+// orthogonal to η and is not modeled here. Treat outputs as a floor for
+// Hopper+ and apply your own MTP multiplier downstream.
 
 type BatchEfficiency = Record<number, number>;
 type Confidence = 'measured' | 'interpolated' | 'unmeasured';
@@ -253,6 +278,7 @@ export function calculateThroughput(
   return {
     prefillTps, decodeTpsAggregate, decodeTpsPerStream,
     weightsBytes, kvPerSeqBytes, bytesReadPerStep,
+    decodeEfficiency,
   };
 }
 
@@ -448,6 +474,7 @@ export interface BreakEvenPoint {
   selfHosted: number;
   api: number;
   gpuCount: number;
+  gpuName: string;
 }
 
 export function generateBreakEvenData(
@@ -503,7 +530,7 @@ export function generateBreakEvenData(
     const gpuRec = recommendGPU(vramData, model, quantization, kvDtype, avgTokens, inputRatio, vol, concurrentRequests, peakFactor, replicas, mfu, pricingTier);
     const selfHosted = (gpuRec.count * gpuRec.price.rate * 730) / util + opsAdd;
 
-    return { volume: vol, selfHosted, api: apiCost, gpuCount: gpuRec.count };
+    return { volume: vol, selfHosted, api: apiCost, gpuCount: gpuRec.count, gpuName: gpuRec.gpu.name };
   });
 }
 
