@@ -1,7 +1,53 @@
 import {
   QUANTIZATIONS, KV_DTYPES, GPUS, BATCH_DISCOUNT, PRICING_TIERS, API_PRICING,
-  type ModelVariant, type GPU,
+  type ModelVariant, type GPU, type GPUPricing,
 } from '../data/constants';
+
+//
+// Provider pricing selection
+//
+
+export interface PriceQuote {
+  rate: number;          // $/hr
+  provider: string;
+  source: string;
+  effectiveTier: 'on_demand' | 'reserved_1y' | 'spot';
+  fallback: boolean;     // true if tier-specific rate was missing and on_demand × multiplier was used
+}
+
+type TierKey = 'on_demand' | 'reserved_1y' | 'spot';
+
+function quoteFor(p: GPUPricing, tierKey: TierKey, fallbackMult: number): { rate: number; fallback: boolean } {
+  if (tierKey === 'spot' && p.spot != null) return { rate: p.spot, fallback: false };
+  if (tierKey === 'reserved_1y' && p.reserved_1y != null) return { rate: p.reserved_1y, fallback: false };
+  if (tierKey === 'on_demand') return { rate: p.on_demand, fallback: false };
+  return { rate: p.on_demand * fallbackMult, fallback: true };
+}
+
+// Sorted list of all providers for a GPU at the given tier. Providers that
+// publish an explicit rate for the requested tier are preferred; estimates
+// (on_demand × tier multiplier) only appear when no provider lists the tier.
+export function getGpuPriceList(gpu: GPU, tier: string): Array<PriceQuote & { raw: GPUPricing }> {
+  const tierKey: TierKey = tier === 'spot' || tier === 'reserved_1y' ? tier : 'on_demand';
+  const fallbackMult = PRICING_TIERS[tierKey] ?? 1.0;
+  const quoted = gpu.pricing.map(p => {
+    const q = quoteFor(p, tierKey, fallbackMult);
+    return { rate: q.rate, provider: p.provider, source: p.source, effectiveTier: tierKey, fallback: q.fallback, raw: p };
+  });
+  const explicit = quoted.filter(q => !q.fallback);
+  const list = explicit.length > 0 ? explicit : quoted;
+  return list.sort((a, b) => a.rate - b.rate);
+}
+
+// Pick the cheapest provider for a given tier. Explicit tier prices are
+// preferred over estimates; if no provider publishes the tier, the best
+// fallback estimate is returned (marked .fallback=true).
+export function getGpuPrice(gpu: GPU, tier: string): PriceQuote {
+  const list = getGpuPriceList(gpu, tier);
+  const { raw: _raw, ...best } = list[0];
+  void _raw;
+  return best;
+}
 
 //
 // VRAM Calculation
@@ -31,9 +77,19 @@ export function calculateVRAM(
 
   let kvPerToken: number;
   if (model.arch === 'mla') {
-    kvPerToken = 2 * model.layers * (model.kv_dim || 512) * kv.bytes;
+    // DeepSeek-V2 §2.1.3 / V3 tech report: per-token MLA cache is
+    // (d_c + d_h^R) × n_layers — the compressed latent reconstructs both K
+    // and V (no factor of 2), plus a decoupled RoPE head dim (d_h^R = 64).
+    const ropeDim = 64;
+    kvPerToken = model.layers * ((model.kv_dim || 512) + ropeDim) * kv.bytes;
+  } else if (model.arch === 'mqa_shared') {
+    // DeepSeek-V4 hybrid attention: single K=V tensor read as both K and V
+    // (HF transformers v5.9 deepseek_v4: num_key_value_heads=1, shared K=V).
+    // No factor of 2 — the same tensor serves both roles.
+    const headDim = model.head_dim || (model.hidden / model.heads);
+    kvPerToken = model.layers * headDim * kv.bytes;
   } else {
-    const headDim = model.hidden / model.heads;
+    const headDim = model.head_dim || (model.hidden / model.heads);
     const kvHeads = model.kv_heads || model.heads;
     kvPerToken = 2 * model.layers * kvHeads * headDim * kv.bytes;
   }
@@ -60,9 +116,14 @@ export function calculateVRAM(
 
 export function calculateKVPerToken(model: ModelVariant, kvBytes: number): number {
   if (model.arch === 'mla') {
-    return 2 * model.layers * (model.kv_dim || 512) * kvBytes;
+    const ropeDim = 64;
+    return model.layers * ((model.kv_dim || 512) + ropeDim) * kvBytes;
   }
-  const headDim = model.hidden / model.heads;
+  if (model.arch === 'mqa_shared') {
+    const headDim = model.head_dim || (model.hidden / model.heads);
+    return model.layers * headDim * kvBytes;
+  }
+  const headDim = model.head_dim || (model.hidden / model.heads);
   const kvHeads = model.kv_heads || model.heads;
   return 2 * model.layers * kvHeads * headDim * kvBytes;
 }
@@ -78,6 +139,7 @@ export interface ThroughputResult {
   weightsBytes: number;
   kvPerSeqBytes: number;
   bytesReadPerStep: number;
+  decodeEfficiency: number;
 }
 
 // ─── Efficiency Lookup Table ───────────────────────────────────────────────
@@ -86,6 +148,15 @@ export interface ThroughputResult {
 // FP16: Qwen2.5-7B-Instruct, AWQ: Qwen2.5-7B-Instruct-AWQ.
 // Hopper/Blackwell entries extrapolated from Ampere — unmeasured.
 // Interpolation: piecewise linear between measured batch sizes.
+//
+// CONSERVATIVE vs current production (May 2026): vLLM is at v0.21.0 and
+// SGLang ships with FlashMLA (Hopper) hitting 83% of theoretical HBM
+// bandwidth, FlashAttention-3, and native MTP — all well above these
+// Ampere numbers. The table therefore *understates* H100/H200/B200 decode
+// throughput. Engines also commonly run MTP (Gemma 4 MTP drafter ~3×,
+// Qwen3.6 MTP 1.7–2.4×, DeepSeek V3/V4 native MTP heads) which is
+// orthogonal to η and is not modeled here. Treat outputs as a floor for
+// Hopper+ and apply your own MTP multiplier downstream.
 
 type BatchEfficiency = Record<number, number>;
 type Confidence = 'measured' | 'interpolated' | 'unmeasured';
@@ -207,6 +278,7 @@ export function calculateThroughput(
   return {
     prefillTps, decodeTpsAggregate, decodeTpsPerStream,
     weightsBytes, kvPerSeqBytes, bytesReadPerStep,
+    decodeEfficiency,
   };
 }
 
@@ -227,6 +299,7 @@ export interface GpuRecommendation {
   monthlyCost: number;
   inputTpsRequired: number;
   outputTpsRequired: number;
+  price: PriceQuote;
 }
 
 export function recommendGPU(
@@ -240,7 +313,8 @@ export function recommendGPU(
   concurrentRequests: number,
   peakFactor: number,
   replicas: number,
-  mfu: number
+  mfu: number,
+  pricingTier: string = 'on_demand'
 ): GpuRecommendation {
   const q = QUANTIZATIONS.find(x => x.key === quantization) || QUANTIZATIONS[2];
   const kv = KV_DTYPES.find(x => x.key === kvDtype) || KV_DTYPES[0];
@@ -266,12 +340,15 @@ export function recommendGPU(
     const gpusThroughput = Math.max(gpusForPrefill, gpusForDecode);
     const gpusVram = Math.max(1, Math.ceil(vramData.totalVRAM / (gpu.vram * 1e9)));
 
-    // Key: skip non-TP GPUs when multi-GPU is required within a single replica
+    // Tensor parallelism is only required when the *model* doesn't fit on a
+    // single GPU. If it fits but throughput demands more, that's just data-
+    // parallel replicas — non-TP cards (4090, 3090, 5090) can serve that.
     const gpusNeeded = Math.max(gpusThroughput, gpusVram);
-    if (gpusNeeded > 1 && !gpu.tp_capable) continue;
+    if (gpusVram > 1 && !gpu.tp_capable) continue;
 
     const totalGpus = gpusNeeded * replicas;
-    const monthlyCost = totalGpus * gpu.hourly * 730;
+    const price = getGpuPrice(gpu, pricingTier);
+    const monthlyCost = totalGpus * price.rate * 730;
 
     if (monthlyCost < bestCost) {
       bestCost = monthlyCost;
@@ -279,7 +356,7 @@ export function recommendGPU(
         gpu, count: totalGpus, baseCount: gpusNeeded, replicas,
         bottleneck: gpusThroughput > gpusVram ? 'throughput' : gpusVram > gpusThroughput ? 'vram' : 'both',
         throughput: tp, gpusForPrefill, gpusForDecode, gpusVram, monthlyCost,
-        inputTpsRequired, outputTpsRequired,
+        inputTpsRequired, outputTpsRequired, price,
       };
     }
   }
@@ -308,6 +385,8 @@ export interface CostResult {
   batchMult: number;
   storageCost: number;
   gpuUtilization: number;
+  opsMonthly: number;
+  selfHostedGpuMonthly: number;
 }
 
 // Uncertainty bands. Self-hosted is wider and asymmetric:
@@ -329,25 +408,35 @@ export function calculateCosts(
   model: ModelVariant,
   quantization: string,
   apiModelName: string,
+  apiProviderName: string | undefined,
   cacheHitRatio: number,
   gpuUtilization: number,
   batchEnabled: boolean,
-  pricingTier: string
+  _pricingTier: string,
+  opsMonthly: number = 0
 ): CostResult {
   const monthlyCalls = dailyVolume * 30;
   const totalTokensMonthly = monthlyCalls * avgTokens;
 
-  const tierMult = PRICING_TIERS[pricingTier] || 1.0;
+  // Tier-specific rate (cheapest provider for selected tier) is baked into gpuRec.price by recommendGPU.
   const util = Math.max(0.2, Math.min(1, gpuUtilization / 100));
-  const selfHostedBase = gpuRec.count * gpuRec.gpu.hourly * 730 * tierMult;
-  const selfHostedMonthly = selfHostedBase / util;
+  const selfHostedBase = gpuRec.count * gpuRec.price.rate * 730;
+  const selfHostedGpu = selfHostedBase / util;
+  // Ops overhead (engineering FTE × loaded cost) applies only to self-hosted —
+  // API is fully managed, so no engineering-time charge there. This is what
+  // typically flips honest break-even analyses right by a few thousand req/day.
+  const selfHostedMonthly = selfHostedGpu + Math.max(0, opsMonthly);
 
   // Storage: use TOTAL params (all experts on disk)
   const quantBytesForStorage = QUANTIZATIONS.find(q => q.key === quantization)?.bytes || 0.5;
   const storageGB = (model.params * 1e9 * quantBytesForStorage) / 1e9;
   const storageCost = storageGB * 0.10;
 
-  const apiPricing = API_PRICING.find(p => p.model === apiModelName) || API_PRICING[0];
+  const apiPricing = (apiProviderName
+    ? API_PRICING.find(p => p.model === apiModelName && p.provider === apiProviderName)
+    : undefined)
+    ?? API_PRICING.find(p => p.model === apiModelName)
+    ?? API_PRICING[0];
   const cacheMult = 1 - (cacheHitRatio / 100) * (apiPricing.cache || 0.5);
   const batchMult = batchEnabled ? BATCH_DISCOUNT : 1;
 
@@ -358,10 +447,12 @@ export function calculateCosts(
   const selfHostedPerTranscript = selfHostedMonthly / monthlyCalls;
   const apiPerTranscript = apiMonthly / monthlyCalls;
 
+  // Uncertainty bands apply to the GPU portion only — ops is a flat headcount cost.
+  const opsClamped = Math.max(0, opsMonthly);
   return {
     selfHostedMonthly,
-    selfHostedMonthlyLow: selfHostedMonthly * SELF_HOSTED_LOW_FACTOR,
-    selfHostedMonthlyHigh: selfHostedMonthly * SELF_HOSTED_HIGH_FACTOR,
+    selfHostedMonthlyLow: selfHostedGpu * SELF_HOSTED_LOW_FACTOR + opsClamped,
+    selfHostedMonthlyHigh: selfHostedGpu * SELF_HOSTED_HIGH_FACTOR + opsClamped,
     apiMonthly,
     apiMonthlyLow: apiMonthly * API_LOW_FACTOR,
     apiMonthlyHigh: apiMonthly * API_HIGH_FACTOR,
@@ -370,6 +461,7 @@ export function calculateCosts(
     savings: Math.abs(selfHostedMonthly - apiMonthly),
     savingsPercent: Math.abs(selfHostedMonthly - apiMonthly) / Math.max(selfHostedMonthly, apiMonthly) * 100,
     apiPricing, cacheMult, batchMult, storageCost, gpuUtilization: util * 100,
+    opsMonthly: opsClamped, selfHostedGpuMonthly: selfHostedGpu,
   };
 }
 
@@ -382,6 +474,7 @@ export interface BreakEvenPoint {
   selfHosted: number;
   api: number;
   gpuCount: number;
+  gpuName: string;
 }
 
 export function generateBreakEvenData(
@@ -397,21 +490,27 @@ export function generateBreakEvenData(
   mfu: number,
   gpuUtilization: number,
   apiModelName: string,
+  apiProviderName: string | undefined,
   cacheHitRatio: number,
   batchEnabled: boolean,
-  pricingTier: string
+  pricingTier: string,
+  opsMonthly: number = 0
 ): BreakEvenPoint[] {
-  const apiPricing = API_PRICING.find(p => p.model === apiModelName) || API_PRICING[0];
+  const apiPricing = (apiProviderName
+    ? API_PRICING.find(p => p.model === apiModelName && p.provider === apiProviderName)
+    : undefined)
+    ?? API_PRICING.find(p => p.model === apiModelName)
+    ?? API_PRICING[0];
   const cacheMult = 1 - (cacheHitRatio / 100) * (apiPricing.cache || 0.5);
   const batchMult = batchEnabled ? BATCH_DISCOUNT : 1;
-  const tierMult = PRICING_TIERS[pricingTier] || 1.0;
   const util = Math.max(0.2, Math.min(1, gpuUtilization / 100));
 
   const blendedPrice = (apiPricing.input * cacheMult * (inputRatio / 100) + apiPricing.output * ((100 - inputRatio) / 100)) * batchMult;
   const baseVramData = calculateVRAM(model, quantization, kvDtype, contextLength, concurrentRequests, avgTokens);
-  const baseGpuRec = recommendGPU(baseVramData, model, quantization, kvDtype, avgTokens, inputRatio, 100, concurrentRequests, peakFactor, replicas, mfu);
+  const baseGpuRec = recommendGPU(baseVramData, model, quantization, kvDtype, avgTokens, inputRatio, 100, concurrentRequests, peakFactor, replicas, mfu, pricingTier);
+  const opsAdd = Math.max(0, opsMonthly);
   const exactBreakEven = blendedPrice > 0
-    ? (baseGpuRec.count * baseGpuRec.gpu.hourly * 730 * tierMult / util) / ((avgTokens * 30 / 1e6) * blendedPrice)
+    ? (baseGpuRec.count * baseGpuRec.price.rate * 730 / util + opsAdd) / ((avgTokens * 30 / 1e6) * blendedPrice)
     : 1000;
 
   const maxVolume = Math.max(5000, Math.ceil(exactBreakEven * 3));
@@ -428,11 +527,55 @@ export function generateBreakEvenData(
     const apiCost = ((inputTokens / 1e6 * apiPricing.input * cacheMult) + (outputTokens / 1e6 * apiPricing.output)) * batchMult;
 
     const vramData = calculateVRAM(model, quantization, kvDtype, contextLength, concurrentRequests, avgTokens);
-    const gpuRec = recommendGPU(vramData, model, quantization, kvDtype, avgTokens, inputRatio, vol, concurrentRequests, peakFactor, replicas, mfu);
-    const selfHosted = (gpuRec.count * gpuRec.gpu.hourly * 730 * tierMult) / util;
+    const gpuRec = recommendGPU(vramData, model, quantization, kvDtype, avgTokens, inputRatio, vol, concurrentRequests, peakFactor, replicas, mfu, pricingTier);
+    const selfHosted = (gpuRec.count * gpuRec.price.rate * 730) / util + opsAdd;
 
-    return { volume: vol, selfHosted, api: apiCost, gpuCount: gpuRec.count };
+    return { volume: vol, selfHosted, api: apiCost, gpuCount: gpuRec.count, gpuName: gpuRec.gpu.name };
   });
+}
+
+//
+// API comparison across all priced models
+//
+
+export interface ApiCostRow {
+  model: string;
+  provider: string;
+  monthly: number;
+  perRequest: number;
+  inputPerM: number;
+  outputPerM: number;
+  path: 'proprietary' | 'aggregator';
+  notes?: string;
+}
+
+export function calculateAllApiCosts(
+  dailyVolume: number,
+  avgTokens: number,
+  inputRatio: number,
+  cacheHitRatio: number,
+  batchEnabled: boolean,
+): ApiCostRow[] {
+  const monthlyCalls = dailyVolume * 30;
+  const totalTokensMonthly = monthlyCalls * avgTokens;
+  const inputTokens = totalTokensMonthly * (inputRatio / 100);
+  const outputTokens = totalTokensMonthly * ((100 - inputRatio) / 100);
+  const batchMult = batchEnabled ? BATCH_DISCOUNT : 1;
+
+  return API_PRICING.map(p => {
+    const cacheMult = 1 - (cacheHitRatio / 100) * (p.cache || 0.5);
+    const monthly = ((inputTokens / 1e6 * p.input * cacheMult) + (outputTokens / 1e6 * p.output)) * batchMult;
+    return {
+      model: p.model,
+      provider: p.provider,
+      monthly,
+      perRequest: monthlyCalls > 0 ? monthly / monthlyCalls : 0,
+      inputPerM: p.input,
+      outputPerM: p.output,
+      path: p.path,
+      notes: p.notes,
+    };
+  }).sort((a, b) => a.monthly - b.monthly);
 }
 
 export function findBreakEven(data: BreakEvenPoint[]): number | null {

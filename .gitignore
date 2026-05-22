@@ -1,7 +1,13 @@
 CONSULTING.md
 CONTEXT.md
+GPT-5.4-MINI-OPEN-ALTERNATIVES.md
+LLM-USAGE-RANKINGS-MAY-2026.md
+PROVIDER-PRICING-DATA.md
 .DS_Store
 *.log
 node_modules/
 openrouter_models_extracted.json
 dist/
+.camofox-test.sh
+.smoke.mts
+.fmt.mts

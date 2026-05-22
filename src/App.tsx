@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { MODELS, QUANTIZATIONS, KV_DTYPES, PRICING_TIERS, API_PRICING, PRESETS } from './data/constants';
+import { MODELS, QUANTIZATIONS, KV_DTYPES, PRESETS, API_PRICING } from './data/constants';
 import type { ModelVariant, Preset } from './data/constants';
 import {
   calculateVRAM, calculateKVPerToken, calculateThroughput,
   recommendGPU, calculateCosts, generateBreakEvenData,
   findBreakEven, estimateArchitecture, getConfidence,
+  getGpuPriceList, calculateAllApiCosts,
 } from './lib/calculations';
 import Slider from './components/Slider';
 import BreakEvenChart from './components/BreakEvenChart';
 import PresetSelector from './components/PresetSelector';
 import ThemeToggle from './components/ThemeToggle';
+import ApiComparisonTable from './components/ApiComparisonTable';
+import { formatCost, formatPerRequest } from './lib/format';
 
 export default function App() {
   // Theme
@@ -21,27 +24,86 @@ export default function App() {
   });
 
   // State
-  const DEFAULT_PRESET = PRESETS[0]; // Customer Support Bot
-  const [family, setFamily] = useState(DEFAULT_PRESET.family);
-  const [variant, setVariant] = useState(DEFAULT_PRESET.variant);
+  // Default state — Gemma 4 26B MoE, realistic production traffic, on-demand pricing
+  const DEFAULT_STATE = {
+    family: 'qwen35',
+    variant: 'Qwen3.5-27B',
+    quantization: 'q4_k_m',
+    contextLength: 8192,
+    concurrent: 8,
+    dailyVolume: 10000,    // 10k req/day: real SaaS — below this API always wins
+    avgTokens: 4000,       // system prompt + 2-3 turns history + response ≈ 3-4k tokens
+    inputRatio: 70,        // 70/30 input/output — typical conversational app
+    peakFactor: 2.5,
+    replicaCount: 1,
+    pricingTier: 'on_demand',
+    mfu: 0.35,
+  };
+  const [family, setFamily] = useState(DEFAULT_STATE.family);
+  const [variant, setVariant] = useState(DEFAULT_STATE.variant);
   const [awqKernel, setAwqKernel] = useState<'marlin' | 'default'>('marlin');
-  const [quantization, setQuantization] = useState(DEFAULT_PRESET.quantization);
+  const [quantization, setQuantization] = useState(DEFAULT_STATE.quantization);
   const [kvDtype, setKvDtype] = useState('fp16');
-  const [contextLength, setContextLength] = useState(DEFAULT_PRESET.contextLength);
-  const [concurrent, setConcurrent] = useState(DEFAULT_PRESET.concurrent);
-  const [dailyVolume, setDailyVolume] = useState(DEFAULT_PRESET.dailyVolume);
-  const [avgTokens, setAvgTokens] = useState(DEFAULT_PRESET.avgTokens);
-  const [inputRatio, setInputRatio] = useState(DEFAULT_PRESET.inputRatio);
+  const [contextLength, setContextLength] = useState(DEFAULT_STATE.contextLength);
+  const [concurrent, setConcurrent] = useState(DEFAULT_STATE.concurrent);
+  const [dailyVolume, setDailyVolume] = useState(DEFAULT_STATE.dailyVolume);
+  const [avgTokens, setAvgTokens] = useState(DEFAULT_STATE.avgTokens);
+  const [inputRatio, setInputRatio] = useState(DEFAULT_STATE.inputRatio);
   const [customParams, setCustomParams] = useState(7);
-  const [apiModel, setApiModel] = useState('GPT-4o');
+  const [apiModel, setApiModel] = useState('GPT-5.4 mini');
+  const [apiProvider, setApiProvider] = useState('OpenAI');
   const [cacheHitRatio, setCacheHitRatio] = useState(0);
   const [gpuUtilization, setGpuUtilization] = useState(85);
   const [batchEnabled, setBatchEnabled] = useState(false);
-  const [replicaCount, setReplicaCount] = useState(DEFAULT_PRESET.replicaCount);
-  const [peakFactor, setPeakFactor] = useState(DEFAULT_PRESET.peakFactor);
-  const [pricingTier, setPricingTier] = useState(DEFAULT_PRESET.pricingTier);
-  const [mfu, setMfu] = useState(DEFAULT_PRESET.mfu);
+  const [replicaCount, setReplicaCount] = useState(DEFAULT_STATE.replicaCount);
+  const [peakFactor, setPeakFactor] = useState(DEFAULT_STATE.peakFactor);
+  const [pricingTier, setPricingTier] = useState(DEFAULT_STATE.pricingTier);
+  const [mfu, setMfu] = useState(DEFAULT_STATE.mfu);
+  const [opsEnabled, setOpsEnabled] = useState(false);
+  const [opsFte, setOpsFte] = useState(0.5);
+  const [opsCostPerFte, setOpsCostPerFte] = useState(150000);
+  const [showEngineering, setShowEngineering] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
   const [resetKey, setResetKey] = useState(0);
+
+  const opsMonthly = opsEnabled ? (opsFte * opsCostPerFte) / 12 : 0;
+
+  const handleShareUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 2000);
+    } catch {}
+  };
+
+  const handleCopySummary = () => {
+    // costs / gpuRec / breakEvenVal are available via closure at call time
+    const fmtVol = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v);
+    const win = costs.winner === 'self' ? 'Self-hosting' : 'API';
+    const lines = [
+      'LLM Deploy Cost Calculator',
+      '─'.repeat(36),
+      `Model:   ${MODELS[family]?.family ?? family} ${variant} · ${quantization.toUpperCase()}`,
+      `Scale:   ${dailyVolume.toLocaleString()} req/day · ${formatTokens(avgTokens)} tokens/req`,
+      `         ${pricingTier.replace('_', ' ')} GPU pricing · ${inputRatio}/${100 - inputRatio} input/output`,
+      '',
+      `VERDICT: ${win} saves ${formatCost(costs.savings)}/mo (${costs.savingsPercent.toFixed(0)}% cheaper at current scale)`,
+      `  Self-hosted ${formatCost(costs.selfHostedMonthly)}/mo  — ${gpuRec.gpu.name} ×${gpuRec.count} (${gpuRec.price.provider} @ $${gpuRec.price.rate.toFixed(2)}/hr)`,
+      `  API         ${formatCost(costs.apiMonthly)}/mo  — ${costs.apiPricing.provider} · ${apiModel}`,
+      breakEvenVal
+        ? `  Break-even: ${fmtVol(breakEvenVal)} req/day (${dailyVolume > breakEvenVal ? 'you are past it' : 'you are below it'})`
+        : `  Break-even: never at this model + tier combination`,
+      '',
+      '─'.repeat(36),
+      window.location.href,
+    ];
+    try {
+      navigator.clipboard.writeText(lines.join('\n'));
+      setCopiedSummary(true);
+      setTimeout(() => setCopiedSummary(false), 2000);
+    } catch {}
+  };
 
   // Theme effect
   useEffect(() => {
@@ -53,12 +115,14 @@ export default function App() {
   // URL state
   const urlParams = useMemo(() => ({
     family, variant, quantization, contextLength, concurrent, dailyVolume,
-    avgTokens, inputRatio, customParams, apiModel, cacheHitRatio,
+    avgTokens, inputRatio, customParams, apiModel, apiProvider, cacheHitRatio,
     gpuUtilization, batchEnabled: batchEnabled ? '1' : '0',
     kvDtype, replicaCount, peakFactor, pricingTier, mfu,
+    opsEnabled: opsEnabled ? '1' : '0', opsFte, opsCostPerFte,
   }), [family, variant, quantization, contextLength, concurrent, dailyVolume,
-    avgTokens, inputRatio, customParams, apiModel, cacheHitRatio,
-    gpuUtilization, batchEnabled, kvDtype, replicaCount, peakFactor, pricingTier, mfu]);
+    avgTokens, inputRatio, customParams, apiModel, apiProvider, cacheHitRatio,
+    gpuUtilization, batchEnabled, kvDtype, replicaCount, peakFactor, pricingTier, mfu,
+    opsEnabled, opsFte, opsCostPerFte]);
 
   useEffect(() => {
     try {
@@ -93,7 +157,19 @@ export default function App() {
       if (p.has('avgTokens')) setAvgTokens(Number(p.get('avgTokens')));
       if (p.has('inputRatio')) setInputRatio(Number(p.get('inputRatio')));
       if (p.has('customParams')) setCustomParams(Number(p.get('customParams')));
-      if (p.has('apiModel')) setApiModel(p.get('apiModel')!);
+      if (p.has('apiModel')) {
+        const m = p.get('apiModel')!;
+        setApiModel(m);
+        if (p.has('apiProvider')) {
+          setApiProvider(p.get('apiProvider')!);
+        } else {
+          // Sync provider to first matching row for backwards-compat URLs without apiProvider
+          const row = API_PRICING.find(r => r.model === m);
+          if (row) setApiProvider(row.provider);
+        }
+      } else if (p.has('apiProvider')) {
+        setApiProvider(p.get('apiProvider')!);
+      }
       if (p.has('cacheHitRatio')) setCacheHitRatio(Number(p.get('cacheHitRatio')));
       if (p.has('gpuUtilization')) setGpuUtilization(Number(p.get('gpuUtilization')));
       if (p.has('batchEnabled')) setBatchEnabled(p.get('batchEnabled') === '1');
@@ -102,6 +178,9 @@ export default function App() {
       if (p.has('peakFactor')) setPeakFactor(Number(p.get('peakFactor')));
       if (p.has('pricingTier')) setPricingTier(p.get('pricingTier')!);
       if (p.has('mfu')) setMfu(Number(p.get('mfu')));
+      if (p.has('opsEnabled')) setOpsEnabled(p.get('opsEnabled') === '1');
+      if (p.has('opsFte')) setOpsFte(Number(p.get('opsFte')));
+      if (p.has('opsCostPerFte')) setOpsCostPerFte(Number(p.get('opsCostPerFte')));
     } catch {}
   }, []);
 
@@ -138,18 +217,24 @@ export default function App() {
   [model, quantization, kvDtype, contextLength, concurrent, avgTokens]);
 
   const gpuRec = useMemo(() =>
-    recommendGPU(vramData, model, quantization, kvDtype, avgTokens, inputRatio, dailyVolume, concurrent, peakFactor, replicaCount, mfu),
-  [vramData, model, quantization, kvDtype, avgTokens, inputRatio, dailyVolume, concurrent, peakFactor, replicaCount, mfu]);
+    recommendGPU(vramData, model, quantization, kvDtype, avgTokens, inputRatio, dailyVolume, concurrent, peakFactor, replicaCount, mfu, pricingTier),
+  [vramData, model, quantization, kvDtype, avgTokens, inputRatio, dailyVolume, concurrent, peakFactor, replicaCount, mfu, pricingTier]);
+
+  const providerQuotes = useMemo(() => getGpuPriceList(gpuRec.gpu, pricingTier), [gpuRec.gpu, pricingTier]);
 
   const costs = useMemo(() =>
-    calculateCosts(dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier),
-  [dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier]);
+    calculateCosts(dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, apiProvider, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier, opsMonthly),
+  [dailyVolume, avgTokens, inputRatio, gpuRec, model, quantization, apiModel, apiProvider, cacheHitRatio, gpuUtilization, batchEnabled, pricingTier, opsMonthly]);
 
   const breakEvenData = useMemo(() =>
-    generateBreakEvenData(avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, cacheHitRatio, batchEnabled, pricingTier),
-  [avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, cacheHitRatio, batchEnabled, pricingTier]);
+    generateBreakEvenData(avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, apiProvider, cacheHitRatio, batchEnabled, pricingTier, opsMonthly),
+  [avgTokens, inputRatio, model, quantization, kvDtype, contextLength, concurrent, peakFactor, replicaCount, mfu, gpuUtilization, apiModel, apiProvider, cacheHitRatio, batchEnabled, pricingTier, opsMonthly]);
 
   const breakEvenVal = useMemo(() => findBreakEven(breakEvenData), [breakEvenData]);
+
+  const apiCostRows = useMemo(() =>
+    calculateAllApiCosts(dailyVolume, avgTokens, inputRatio, cacheHitRatio, batchEnabled),
+  [dailyVolume, avgTokens, inputRatio, cacheHitRatio, batchEnabled]);
 
   // Handlers
   const handlePreset = (preset: Preset) => {
@@ -168,13 +253,14 @@ export default function App() {
   };
 
   const handleReset = () => {
-    const p = DEFAULT_PRESET;
-    setFamily(p.family); setVariant(p.variant); setQuantization(p.quantization);
-    setContextLength(p.contextLength); setConcurrent(p.concurrent); setDailyVolume(p.dailyVolume);
-    setAvgTokens(p.avgTokens); setInputRatio(p.inputRatio); setCustomParams(7);
-    setApiModel('GPT-4o'); setCacheHitRatio(0); setGpuUtilization(85);
-    setBatchEnabled(false); setKvDtype('fp16'); setReplicaCount(p.replicaCount);
-    setPeakFactor(p.peakFactor); setPricingTier(p.pricingTier); setMfu(p.mfu);
+    const d = DEFAULT_STATE;
+    setFamily(d.family); setVariant(d.variant); setQuantization(d.quantization);
+    setContextLength(d.contextLength); setConcurrent(d.concurrent); setDailyVolume(d.dailyVolume);
+    setAvgTokens(d.avgTokens); setInputRatio(d.inputRatio); setCustomParams(7);
+    setApiModel('GPT-5.4 mini'); setApiProvider('OpenAI'); setCacheHitRatio(0); setGpuUtilization(85);
+    setBatchEnabled(false); setKvDtype('fp16'); setReplicaCount(d.replicaCount);
+    setPeakFactor(d.peakFactor); setPricingTier(d.pricingTier); setMfu(d.mfu);
+    setOpsEnabled(false); setOpsFte(0.5); setOpsCostPerFte(150000);
     setResetKey(k => k + 1);
   };
 
@@ -226,33 +312,56 @@ export default function App() {
               Reset
             </button>
             <PresetSelector onSelect={handlePreset} resetKey={resetKey} />
+            <button onClick={handleShareUrl}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+              style={{
+                color: copiedUrl ? 'var(--accent-success)' : 'var(--text-secondary)',
+                border: `1px solid ${copiedUrl ? 'var(--accent-success)' : 'var(--border)'}`,
+                minWidth: '90px',
+              }}>
+              {copiedUrl ? '✓ copied' : 'Share link'}
+            </button>
             <ThemeToggle dark={dark} setDark={setDark} />
           </div>
         </div>
       </header>
 
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs px-3 py-2 rounded-lg"
+          style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+          <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>Work in progress.</span>
+          <span>Still tightening the numbers and formulas. If something looks off, tell me.</span>
+          <span style={{ color: 'var(--text-muted)' }}>Ping me on</span>
+          <a href="https://twitter.com/ree2raz" target="_blank" rel="noopener noreferrer"
+            className="underline hover:no-underline" style={{ color: 'var(--accent-primary)' }}>Twitter</a>
+          <span style={{ color: 'var(--text-muted)' }}>or</span>
+          <a href="https://linkedin.com/in/ree2raz" target="_blank" rel="noopener noreferrer"
+            className="underline hover:no-underline" style={{ color: 'var(--accent-primary)' }}>LinkedIn</a>
+          <span>.</span>
+        </div>
+      </div>
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT: Inputs (4 cols) */}
-          <div className="lg:col-span-4 space-y-5 order-last lg:order-none">
-            {/* Model & Deployment */}
-            <div className="gruv-card p-5">
-              <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>
-                Model & Deployment
-              </h2>
+          <div className="lg:col-span-4 space-y-4 order-last lg:order-none">
 
+            {/* Card 1: Model */}
+            <div className="gruv-card p-5">
+              <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>Model</h2>
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Model Family</label>
                 <select value={family}
                   onChange={e => { setFamily(e.target.value); setVariant(MODELS[e.target.value].variants[0].name); }}
                   className="gruv-input">
-                  {Object.entries(MODELS).map(([key, data]) => (
-                    <option key={key} value={key}>{data.family}</option>
-                  ))}
+                  {Object.entries(MODELS)
+                    .sort(([a], [b]) => (a === 'custom' ? 1 : b === 'custom' ? -1 : 0))
+                    .map(([key, data]) => (
+                      <option key={key} value={key}>{data.family}</option>
+                    ))}
                 </select>
               </div>
-
-              <div className="mb-4">
+              <div>
                 <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Variant</label>
                 <select value={variant} onChange={e => setVariant(e.target.value)} className="gruv-input">
                   {MODELS[family].variants.map(v => (
@@ -262,9 +371,8 @@ export default function App() {
                   ))}
                 </select>
               </div>
-
               {family === 'custom' && (
-                <div className="mb-4">
+                <div className="mt-4">
                   <div className="flex justify-between items-center mb-1.5">
                     <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Parameter Count (Billions)</label>
                     <span className="text-sm font-mono font-semibold" style={{ color: 'var(--accent-primary)' }}>{customParams}B</span>
@@ -277,80 +385,11 @@ export default function App() {
                   </div>
                 </div>
               )}
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Weight Quantization</label>
-                <select value={quantization} onChange={e => setQuantization(e.target.value)} className="gruv-input">
-                  {QUANTIZATIONS.map(q => (
-                    <option key={q.key} value={q.key}>{q.label} ({q.bytes} bytes/param)</option>
-                  ))}
-                </select>
-              </div>
-
-              {quantization === 'awq4' && gpuRec.gpu.generation !== 'Ada' && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>AWQ Kernel</label>
-                  <select value={awqKernel} onChange={e => setAwqKernel(e.target.value as 'marlin' | 'default')} className="gruv-input">
-                    <option value="marlin">Marlin (24-26% of theoretical on Ampere)</option>
-                    <option value="default">Default AWQ (9-16% of theoretical)</option>
-                  </select>
-                  <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Marlin is 48-64% faster on Ampere GPUs.</div>
-                </div>
-              )}
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>KV Cache Precision</label>
-                <select value={kvDtype} onChange={e => setKvDtype(e.target.value)} className="gruv-input">
-                  {KV_DTYPES.map(k => (
-                    <option key={k.key} value={k.key}>{k.label} ({k.bytes} bytes/elem)</option>
-                  ))}
-                </select>
-              </div>
-
-              <Slider label="Context Length" value={contextLength} min={2048} max={model.context} step={2048}
-                onChange={setContextLength} format={formatTokens} />
-              <Slider label="Concurrent Requests" value={concurrent} min={1} max={64} step={1}
-                onChange={setConcurrent} format={v => `${v} req`} />
-
-              <details className="mt-4 mb-2">
-                <summary className="text-sm font-medium cursor-pointer" style={{ color: 'var(--text-muted)' }}>
-                  Advanced: Infrastructure
-                </summary>
-                <div className="mt-3 space-y-4">
-                  <Slider label="Peak Factor (burst multiplier)" value={peakFactor} min={1.0} max={5.0} step={0.5}
-                    onChange={setPeakFactor} format={v => `${v}×`} />
-                  <div className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>3× for 9-to-5, 1.5× for 24/7 global</div>
-
-                  <div>
-                    <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>High Availability Replicas</label>
-                    <input type="number" min={1} max={8} value={replicaCount}
-                      onChange={e => setReplicaCount(Math.max(1, Math.min(8, parseInt(e.target.value) || 1)))}
-                      className="gruv-input" />
-                    <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>GPU × replicas for zero-downtime deploys</div>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>GPU Pricing Tier</label>
-                    <select value={pricingTier} onChange={e => setPricingTier(e.target.value)} className="gruv-input">
-                      <option value="on_demand">On-Demand (1.0×)</option>
-                      <option value="reserved_1y">Reserved 1-Year (0.65×)</option>
-                      <option value="spot">Spot / Community (0.35×)</option>
-                    </select>
-                  </div>
-
-                  <Slider label="Model FLOPS Utilization (MFU)" value={mfu} min={0.20} max={0.50} step={0.05}
-                    onChange={setMfu} format={v => `${(v * 100).toFixed(0)}%`} />
-                  <div className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>Fraction of peak FLOPS. 35% typical, lower for MoE</div>
-                </div>
-              </details>
             </div>
 
-            {/* Traffic & API */}
+            {/* Card 2: Traffic */}
             <div className="gruv-card p-5">
-              <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>
-                Traffic & API
-              </h2>
-
+              <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>Traffic</h2>
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-1.5">
                   <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Requests / Day</label>
@@ -360,51 +399,269 @@ export default function App() {
                   onChange={e => setDailyVolume(Math.max(1, Number(e.target.value)))}
                   className="gruv-input" />
               </div>
-
-              <div className="mb-4">
+              <div className="mb-1">
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Avg Tokens per Request</label>
-                  <span className="text-sm font-mono font-semibold" style={{ color: 'var(--accent-primary)' }}>{formatTokens(avgTokens)}</span>
+                  <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Avg Request Size</label>
+                  <span className="text-sm font-mono font-semibold" style={{ color: 'var(--accent-primary)' }}>{formatTokens(avgTokens)} tokens</span>
                 </div>
                 <input type="number" min={1} max={128000} value={avgTokens}
                   onChange={e => setAvgTokens(Math.max(1, Number(e.target.value)))}
                   className="gruv-input" />
+                <div className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                  short chat ≈ 500 · customer support ≈ 1,500 · doc summary ≈ 8,000
+                </div>
               </div>
 
-              <Slider label="Input / Output Ratio" value={inputRatio} min={10} max={90} step={5}
-                onChange={setInputRatio} format={v => `${v}% / ${100 - v}%`} />
-
-              <div className="mt-4 mb-4">
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>API Comparison Model</label>
-                <select value={apiModel} onChange={e => setApiModel(e.target.value)} className="gruv-input">
-                  {API_PRICING.map(p => (
-                    <option key={p.model} value={p.model}>{p.model} — ${p.input}/${p.output} per 1M ({p.provider})</option>
+              {/* GPU Pricing Tier */}
+              <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>GPU Pricing Tier</label>
+                  {pricingTier === 'reserved_1y' && (
+                    <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(184,187,38,0.12)', color: 'var(--accent-success)' }}>12-month commit</span>
+                  )}
+                  {pricingTier === 'spot' && (
+                    <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(251,73,52,0.12)', color: 'var(--accent-danger)' }}>interruptible</span>
+                  )}
+                </div>
+                <div className="flex gap-1.5">
+                  {([
+                    { key: 'on_demand', label: 'On-demand', sub: '1.0×' },
+                    { key: 'reserved_1y', label: 'Reserved 1yr', sub: '−35%' },
+                    { key: 'spot', label: 'Spot', sub: '−65%' },
+                  ] as const).map(t => (
+                    <button key={t.key} onClick={() => setPricingTier(t.key)}
+                      className="flex-1 py-1.5 rounded text-xs font-medium transition-colors text-center"
+                      style={{
+                        backgroundColor: pricingTier === t.key ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+                        color: pricingTier === t.key ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                        border: `1px solid ${pricingTier === t.key ? 'var(--accent-primary)' : 'var(--border)'}`,
+                      }}>
+                      <div>{t.label}</div>
+                      <div style={{ opacity: 0.75, fontSize: '10px' }}>{t.sub}</div>
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
 
-              <details className="mt-2">
-                <summary className="text-sm font-medium cursor-pointer" style={{ color: 'var(--text-muted)' }}>Adjustments</summary>
-                <div className="mt-3 space-y-4">
-                  <Slider label="API Cache Hit Ratio" value={cacheHitRatio} min={0} max={90} step={5}
-                    onChange={setCacheHitRatio} format={v => `${v}%`} />
-                  <div className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>Input tokens cached at {Math.round(costs.cacheMult * 100)}% of base price</div>
+              <div className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                Comparing against{' '}
+                <span className="font-semibold" style={{ color: 'var(--accent-primary)' }}>{costs.apiPricing.model}</span>
+                {' · '}
+                <span style={{ color: 'var(--text-secondary)' }}>{costs.apiPricing.provider}</span>.{' '}
+                Pick a different API in the comparison table →
+              </div>
+            </div>
+
+            {/* Card 3: Cost Options — visible, plain-English levers */}
+            <div className="gruv-card p-5">
+              <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>Cost Options</h2>
+
+              {/* Batch API */}
+              <div className="pb-4 mb-4 border-b" style={{ borderColor: 'var(--border)' }}>
+                <label className="flex items-center justify-between cursor-pointer mb-1.5">
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    Batch API
+                    {batchEnabled && <span className="ml-2 text-xs font-normal px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(184,187,38,0.12)', color: 'var(--accent-success)' }}>−50%</span>}
+                  </span>
+                  <input type="checkbox" checked={batchEnabled}
+                    onChange={e => setBatchEnabled(e.target.checked)}
+                    className="w-5 h-5 rounded cursor-pointer" style={{ accentColor: 'var(--accent-primary)' }} />
+                </label>
+                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Results in up to 24 hrs — halves API cost. Best for reports, embeddings, async jobs.
+                </div>
+              </div>
+
+              {/* Prompt Caching */}
+              <div className="pb-4 mb-4 border-b" style={{ borderColor: 'var(--border)' }}>
+                <Slider label="Prompt Caching" value={cacheHitRatio} min={0} max={90} step={5}
+                  onChange={setCacheHitRatio} format={v => v === 0 ? 'None' : `${v}%`} />
+                <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  {cacheHitRatio === 0
+                    ? 'Set above 0 if requests share a long system prompt or document.'
+                    : `~${Math.round((1 - costs.cacheMult) * 100)}% discount on repeated input tokens.`}
+                </div>
+              </div>
+
+              {/* Ops overhead */}
+              <div>
+                <label className="flex items-center justify-between cursor-pointer mb-1.5">
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    Add ops cost to self-hosted
+                    {opsEnabled && <span className="ml-2 text-xs font-normal px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(251,73,52,0.12)', color: 'var(--accent-danger)' }}>+{formatCost(opsMonthly)}/mo</span>}
+                  </span>
+                  <input type="checkbox" checked={opsEnabled}
+                    onChange={e => setOpsEnabled(e.target.checked)}
+                    className="w-5 h-5 rounded cursor-pointer" style={{ accentColor: 'var(--accent-primary)' }} />
+                </label>
+                <div className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+                  {opsEnabled
+                    ? `Engineering time to manage infra — ${opsFte} FTE × $${(opsCostPerFte / 1000).toFixed(0)}k/yr.`
+                    : 'Managing self-hosted infra takes real engineering time. Excluded by default.'}
+                </div>
+                {opsEnabled && (
+                  <div className="space-y-3">
+                    <Slider label="Engineering FTE" value={opsFte} min={0.25} max={2} step={0.25}
+                      onChange={setOpsFte} format={v => `${v} FTE`} />
+                    <div>
+                      <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Loaded cost / FTE</label>
+                      <select value={opsCostPerFte} onChange={e => setOpsCostPerFte(Number(e.target.value))} className="gruv-input">
+                        <option value={100000}>Junior — $100k / yr</option>
+                        <option value={150000}>Mid — $150k / yr</option>
+                        <option value={200000}>Senior — $200k / yr</option>
+                        <option value={300000}>Staff — $300k / yr</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Card 4: Technical Assumptions — always shows active values, expandable */}
+            <div className="gruv-card overflow-hidden">
+              <button
+                onClick={() => setShowEngineering(s => !s)}
+                className="w-full px-5 py-4 flex items-start justify-between gap-3 text-left transition-colors"
+                style={{ backgroundColor: 'transparent' }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                    Technical assumptions
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      quantization.toUpperCase(),
+                      `${formatTokens(contextLength)} ctx`,
+                      `${concurrent} concurrent`,
+                      `${inputRatio}/${100 - inputRatio} in/out`,
+                      gpuUtilization !== 85 ? `${gpuUtilization}% util` : null,
+                      replicaCount > 1 ? `${replicaCount}× replicas` : null,
+                    ].filter(Boolean).map(chip => (
+                      <span key={chip as string} className="px-2 py-0.5 rounded-full text-xs font-mono"
+                        style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-xs font-medium shrink-0 flex items-center gap-1 mt-0.5"
+                  style={{ color: 'var(--accent-primary)' }}>
+                  <span>{showEngineering ? 'collapse' : 'customize'}</span>
+                  <span style={{ fontSize: '9px' }}>{showEngineering ? '▲' : '▼'}</span>
+                </div>
+              </button>
+
+              {showEngineering && (
+                <div className="px-5 pb-5 pt-1 space-y-4 border-t" style={{ borderColor: 'var(--border)' }}>
+                  <div className="pt-2">
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Weight Quantization</label>
+                    <select value={quantization} onChange={e => setQuantization(e.target.value)} className="gruv-input">
+                      {QUANTIZATIONS.map(q => (
+                        <option key={q.key} value={q.key}>{q.label} ({q.bytes} bytes/param)</option>
+                      ))}
+                    </select>
+                    <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Lower = less VRAM needed, slightly reduced quality</div>
+                  </div>
+
+                  <Slider label="Context Length" value={contextLength} min={2048} max={model.context} step={2048}
+                    onChange={setContextLength} format={formatTokens} />
+
+                  <Slider label="Concurrent Requests" value={concurrent} min={1} max={64} step={1}
+                    onChange={setConcurrent} format={v => `${v} req`} />
+
+                  <Slider label="Input / Output Ratio" value={inputRatio} min={10} max={90} step={5}
+                    onChange={setInputRatio} format={v => `${v}% / ${100 - v}%`} />
+
+                  <Slider label="Traffic Spikes (peak factor)" value={peakFactor} min={1.0} max={5.0} step={0.5}
+                    onChange={setPeakFactor} format={v => `${v}×`} />
+                  <div className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>3× for 9-to-5, 1.5× for 24/7 global</div>
+
+                  <div>
+                    <label className="text-sm font-medium block mb-1.5" style={{ color: 'var(--text-secondary)' }}>Redundancy (replicas)</label>
+                    <input type="number" min={1} max={8} value={replicaCount}
+                      onChange={e => setReplicaCount(Math.max(1, Math.min(8, parseInt(e.target.value) || 1)))}
+                      className="gruv-input" />
+                    <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>GPU × replicas for zero-downtime deploys</div>
+                  </div>
+
+                  <Slider label="Model FLOPS Utilization (MFU)" value={mfu} min={0.20} max={0.50} step={0.05}
+                    onChange={setMfu} format={v => `${(v * 100).toFixed(0)}%`} />
+                  <div className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>Fraction of peak FLOPS. 35% typical, lower for MoE</div>
+
                   <Slider label="GPU Utilization" value={gpuUtilization} min={20} max={100} step={5}
                     onChange={setGpuUtilization} format={v => `${v}%`} />
                   <div className="text-xs -mt-2" style={{ color: 'var(--text-muted)' }}>Cost inflated ×{parseFloat((1 / (gpuUtilization / 100)).toFixed(2))} at {gpuUtilization}% util</div>
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>API Batch Processing</span>
-                    <input type="checkbox" checked={batchEnabled}
-                      onChange={e => setBatchEnabled(e.target.checked)}
-                      className="w-5 h-5 rounded cursor-pointer" style={{ accentColor: 'var(--accent-primary)' }} />
-                  </label>
+
+                  {quantization === 'awq4' && gpuRec.gpu.generation !== 'Ada' && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>AWQ Kernel</label>
+                      <select value={awqKernel} onChange={e => setAwqKernel(e.target.value as 'marlin' | 'default')} className="gruv-input">
+                        <option value="marlin">Marlin (24-26% of theoretical on Ampere)</option>
+                        <option value="default">Default AWQ (9-16% of theoretical)</option>
+                      </select>
+                      <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Marlin is 48-64% faster on Ampere GPUs.</div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>KV Cache Precision</label>
+                    <select value={kvDtype} onChange={e => setKvDtype(e.target.value)} className="gruv-input">
+                      {KV_DTYPES.map(k => (
+                        <option key={k.key} value={k.key}>{k.label} ({k.bytes} bytes/elem)</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </details>
+              )}
             </div>
           </div>
 
           {/* RIGHT: Outputs (8 cols) */}
           <div className="lg:col-span-8 space-y-5 order-first lg:order-none">
+            {/* Answer-first verdict banner */}
+            {(() => {
+              const fmtVol = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v);
+              const winnerLabel = costs.winner === 'self' ? 'Self-hosting' : 'API';
+              const loserLabel = costs.winner === 'self' ? 'API' : 'self-hosting';
+              const headline = `${winnerLabel} saves ${formatCost(costs.savings)}/mo at ${dailyVolume.toLocaleString()} req/day`;
+              const sub = breakEvenVal
+                ? costs.winner === 'self'
+                  ? `${loserLabel} becomes cheaper below ${fmtVol(breakEvenVal)} req/day`
+                  : `${loserLabel} wins above ${fmtVol(breakEvenVal)} req/day`
+                : costs.winner === 'self'
+                  ? 'Self-hosting wins at every volume for this model + tier'
+                  : 'API wins at every volume — scale up before self-hosting';
+              const accent = costs.winner === 'self' ? 'var(--accent-success)' : 'var(--accent-info)';
+              return (
+                <div className="gruv-card px-5 py-4 flex items-start justify-between gap-4"
+                  style={{ borderLeft: `3px solid ${accent}` }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+                      {headline}
+                    </div>
+                    <div className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                      {sub}
+                      <span className="ml-3 text-xs font-mono px-1.5 py-0.5 rounded"
+                        style={{ backgroundColor: `${accent}22`, color: accent }}>
+                        {costs.savingsPercent.toFixed(0)}% cheaper
+                      </span>
+                    </div>
+                  </div>
+                  <button onClick={handleCopySummary}
+                    className="shrink-0 px-2.5 py-1.5 rounded text-xs font-medium transition-colors"
+                    style={{
+                      border: `1px solid ${copiedSummary ? 'var(--accent-success)' : 'var(--border)'}`,
+                      color: copiedSummary ? 'var(--accent-success)' : 'var(--text-muted)',
+                      minWidth: '108px',
+                    }}>
+                    {copiedSummary ? '✓ copied' : 'Copy summary'}
+                  </button>
+                </div>
+              );
+            })()}
+
             {/* Infrastructure & Cost */}
             <div className="gruv-card p-5">
               <div className="flex items-center justify-between mb-4">
@@ -426,6 +683,16 @@ export default function App() {
               </div>
 
               {/* GPU row */}
+              {(() => {
+                const qBytes = QUANTIZATIONS.find(x => x.key === quantization)?.bytes ?? 0.5;
+                const confidence = getConfidence(gpuRec.gpu.generation, qBytes, quantization, awqKernel, model.arch === 'moe');
+                const bottleneckLabel = gpuRec.bottleneck === 'vram'
+                  ? `memory-limited (needs ${formatBytes(vramData.totalVRAM)})`
+                  : gpuRec.bottleneck === 'throughput'
+                  ? `speed-limited (${gpuRec.outputTpsRequired.toFixed(0)} tok/s required)`
+                  : `memory + speed balanced`;
+                const whyLine = `Cheapest ${pricingTier.replace('_', ' ')} option · ${bottleneckLabel}`;
+                return (
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold shrink-0"
                   style={{ backgroundColor: '#76B900', color: '#000' }}>
@@ -437,23 +704,49 @@ export default function App() {
                     {gpuRec.count > 1 && (
                       <span className="badge" style={{ backgroundColor: gpuRec.replicas > 1 ? 'var(--accent-info)' : 'var(--accent-danger)', color: 'white' }}>{gpuRec.count}× GPU</span>
                     )}
-                    <span className="badge"
-                      style={{ backgroundColor: gpuRec.bottleneck === 'throughput' ? 'var(--accent-warning)' : gpuRec.bottleneck === 'vram' ? 'var(--accent-danger)' : 'var(--accent-success)', color: 'var(--bg-primary)' }}>
-                      {gpuRec.bottleneck === 'throughput' ? 'Throughput-bound' : gpuRec.bottleneck === 'vram' ? 'VRAM-bound' : 'Balanced'}
-                    </span>
+                    {/* G2: confidence pill — measured/interpolated/unmeasured for this GPU+quant combo */}
+                    <span className="badge" style={{
+                      backgroundColor: confidence === 'measured' ? 'rgba(184,187,38,0.15)' : confidence === 'interpolated' ? 'rgba(250,189,47,0.12)' : 'rgba(254,128,25,0.15)',
+                      color: confidence === 'measured' ? 'var(--accent-success)' : confidence === 'interpolated' ? 'var(--accent-primary)' : 'var(--accent-warning)',
+                    }}>{confidence}</span>
                   </div>
                   <div className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                    {gpuRec.gpu.vram} GB VRAM · ${gpuRec.gpu.hourly}/hr · {gpuRec.count} GPU{gpuRec.count > 1 ? 's' : ''}
+                    {gpuRec.gpu.vram} GB VRAM · ${gpuRec.price.rate.toFixed(2)}/hr ({gpuRec.price.provider} {pricingTier.replace('_', ' ')}{gpuRec.price.fallback ? ' est.' : ''}) · {gpuRec.count} GPU{gpuRec.count > 1 ? 's' : ''}
                     {gpuRec.replicas > 1 && ` (${gpuRec.baseCount} base × ${gpuRec.replicas} replicas)`}
                   </div>
+                  {/* G3: plain-English why this GPU was picked */}
+                  <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{whyLine}</div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-2xl font-bold font-mono" style={{ color: 'var(--accent-primary)' }}>
-                    ${(gpuRec.gpu.hourly * 730 * gpuRec.count * (PRICING_TIERS[pricingTier] || 1) / (gpuUtilization / 100)).toFixed(0)}
+                    {formatCost(gpuRec.price.rate * 730 * gpuRec.count / (gpuUtilization / 100))}
                   </div>
                   <div className="text-xs" style={{ color: 'var(--text-muted)' }}>/month ({gpuUtilization}% util · {pricingTier.replace('_', ' ')})</div>
                 </div>
               </div>
+                );
+              })()}
+
+              {/* Provider price comparison */}
+              {providerQuotes.length > 1 && (
+                <details className="mb-4">
+                  <summary className="text-xs cursor-pointer" style={{ color: 'var(--text-muted)' }}>
+                    {providerQuotes.length} providers compared — cheapest: {providerQuotes[0].provider} @ ${providerQuotes[0].rate.toFixed(2)}/hr
+                  </summary>
+                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
+                    {providerQuotes.map((q, i) => (
+                      <div key={q.provider} className="flex justify-between px-2 py-1 rounded"
+                        style={{ backgroundColor: i === 0 ? 'rgba(184, 187, 38, 0.10)' : 'transparent' }}>
+                        <span>{q.provider}{q.fallback ? ' (est.)' : ''}</span>
+                        <span style={{ color: i === 0 ? 'var(--accent-success)' : 'var(--text-muted)' }}>${q.rate.toFixed(2)}/hr</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                    Sourced from provider pricing pages, May 2026. (est.) marks tiers without a published rate — fallback to on-demand × tier multiplier. Verify before committing.
+                  </div>
+                </details>
+              )}
 
               {/* Divider */}
               <div className="border-t mb-4" style={{ borderColor: 'var(--border)' }} />
@@ -462,20 +755,41 @@ export default function App() {
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
                   <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--chart-self)' }}>Self-hosted</div>
-                  <div className="text-xl font-bold font-mono" style={{ color: 'var(--text-primary)' }}>${costs.selfHostedMonthly.toFixed(0)}<span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>/mo</span></div>
+                  <div className="text-xl font-bold font-mono" style={{ color: 'var(--text-primary)' }}>{formatCost(costs.selfHostedMonthly)}<span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>/mo</span></div>
                   <div className="text-xs mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }} title="Range from GPU pricing variance (±15%), continuous batching overhead (10–30%), and realized MFU vs theoretical">
-                    range ${costs.selfHostedMonthlyLow.toFixed(0)}–${costs.selfHostedMonthlyHigh.toFixed(0)}
+                    range {formatCost(costs.selfHostedMonthlyLow)}–{formatCost(costs.selfHostedMonthlyHigh)}
                   </div>
-                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>${costs.selfHostedPerTranscript.toFixed(4)}/request {costs.storageCost > 1 ? `· ${costs.storageCost.toFixed(1)} GB artifact storage` : ''}</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{formatPerRequest(costs.selfHostedPerTranscript)}/request {costs.storageCost > 1 ? `· ${costs.storageCost.toFixed(1)} GB artifact storage` : ''}</div>
+                  {costs.opsMonthly > 0 ? (
+                    <div className="text-xs mt-1">
+                      <div style={{ color: 'var(--accent-warning)' }}>
+                        includes {formatCost(costs.opsMonthly)}/mo ops ({opsFte} FTE × ${(opsCostPerFte / 1000).toFixed(0)}k/yr) · GPU alone {formatCost(costs.selfHostedGpuMonthly)}/mo
+                      </div>
+                      <button onClick={() => setOpsEnabled(false)}
+                        className="underline mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        − remove ops cost
+                      </button>
+                    </div>
+                  ) : (
+                    costs.winner === 'self' && (
+                      <div className="text-xs mt-1">
+                        <button onClick={() => setOpsEnabled(true)}
+                          className="underline" style={{ color: 'var(--text-muted)' }}>
+                          + add ops cost
+                        </button>
+                        <span style={{ color: 'var(--text-muted)' }}> to see true TCO</span>
+                      </div>
+                    )
+                  )}
                 </div>
                 <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
                   <div className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: 'var(--chart-api)' }}>API ({costs.apiPricing.provider})</div>
-                  <div className="text-xl font-bold font-mono" style={{ color: 'var(--text-primary)' }}>${costs.apiMonthly.toFixed(0)}<span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>/mo</span></div>
+                  <div className="text-xl font-bold font-mono" style={{ color: 'var(--text-primary)' }}>{formatCost(costs.apiMonthly)}<span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>/mo</span></div>
                   <div className="text-xs mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }} title="Range from token-count estimation, cache hit-rate drift, and batch eligibility variance">
-                    range ${costs.apiMonthlyLow.toFixed(0)}–${costs.apiMonthlyHigh.toFixed(0)}
+                    range {formatCost(costs.apiMonthlyLow)}–{formatCost(costs.apiMonthlyHigh)}
                   </div>
                   <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                    ${costs.apiPerTranscript.toFixed(4)}/request
+                    {formatPerRequest(costs.apiPerTranscript)}/request
                     {(cacheHitRatio > 0 || batchEnabled) && <span> · {cacheHitRatio > 0 && `${Math.round((1 - costs.cacheMult) * 100)}% cache`}{cacheHitRatio > 0 && batchEnabled && ' + '}{batchEnabled && 'batch 50%'}</span>}
                   </div>
                 </div>
@@ -493,11 +807,14 @@ export default function App() {
                 </div>
               )}
               <div className="text-xs mb-4" style={{ color: 'var(--fg-muted)', lineHeight: '1.5' }}>
-                Decode efficiency calibrated from benchmarks — <a href="https://llm-bench.rituraj.info" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>measured on L4 + A100</a> using vLLM 0.8.5. Per-GPU generation × quantization × batch lookup. Prefill uses MFU ({mfu}). <span className="ml-1 px-1.5 py-0.5 rounded text-xs font-semibold" style={{ backgroundColor: gpuRec.gpu.generation === 'Ada' || gpuRec.gpu.generation === 'Ampere' ? 'var(--accent-success)' : 'var(--accent-warning)', color: 'var(--bg-primary)' }}>{gpuRec.gpu.generation === 'Ada' || gpuRec.gpu.generation === 'Ampere' ? 'measured' : 'unmeasured'}</span>              </div>
+                The decode-efficiency number comes from my own <a href="https://llm-bench.rituraj.info" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>L4 + A100 benchmarks</a> on vLLM 0.8.5. The badge above tells you whether this exact GPU+quant pair was measured, interpolated, or extrapolated.
+              </div>
 
               {gpuRec.count > gpuRec.replicas && (
                 <div className="text-xs p-3 rounded-lg mb-4" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--accent-danger)' }}>
-                  Multi-GPU inference required — tensor parallelism adds communication overhead and engineering complexity.
+                  {gpuRec.gpusVram > 1
+                    ? "Tensor parallelism required. The model doesn't fit on a single GPU's VRAM, so you pay for inter-GPU communication and the engineering work to set it up."
+                    : `Data-parallel only. The model fits on one ${gpuRec.gpu.name}; you need ${gpuRec.baseCount} independent replicas behind a load balancer to hit throughput. No tensor parallelism.`}
                 </div>
               )}
 
@@ -537,12 +854,27 @@ export default function App() {
               </div>
             </div>
 
+            {/* API Comparison Table */}
+            <div className="gruv-card p-5">
+              <ApiComparisonTable
+                rows={apiCostRows}
+                selectedModel={apiModel}
+                selectedProvider={apiProvider}
+                onSelect={(model, provider) => { setApiModel(model); setApiProvider(provider); }}
+                selfHostedMonthly={costs.selfHostedMonthly}
+                dailyVolume={dailyVolume}
+                opsEnabled={opsEnabled}
+                opsMonthly={opsMonthly}
+                onToggleOps={() => setOpsEnabled(v => !v)}
+              />
+            </div>
+
             {/* Break-even Chart */}
             <div className="gruv-card p-5">
               <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-muted)' }}>
                   Break-even Analysis
                 </h2>
-              <BreakEvenChart data={breakEvenData} breakEven={breakEvenVal} />
+              <BreakEvenChart data={breakEvenData} breakEven={breakEvenVal} currentVolume={dailyVolume} />
               <div className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
                 Self-hosted cost steps up when throughput demands an additional GPU. Hover for details.
               </div>
@@ -552,29 +884,66 @@ export default function App() {
                   Show calculation formulas
                 </summary>
                 <div className="mt-3 p-4 rounded-lg text-xs font-mono space-y-2" style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                  <details>
+                    <summary className="cursor-pointer" style={{ color: 'var(--accent-primary)', fontFamily: 'inherit' }}>
+                      What do these symbols mean? (variable glossary)
+                    </summary>
+                    <div className="mt-2 pl-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1" style={{ color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                      <div><span style={{ color: 'var(--accent-info)' }}>MFU</span> — model FLOPs utilization, i.e. how much of the GPU's peak compute the prefill step actually uses (35–50% in tuned production setups).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>GPU_FP16_TFLOPS</span> — the card's peak dense FP16 throughput, from the spec sheet.</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>active_params</span> — parameters touched per forward pass. Same as total for dense models; smaller than total for MoE (only the routed experts run).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>η (eta)</span> — decode efficiency: real tokens/sec divided by the theoretical bandwidth-bound ceiling. Comes from the L4 / A100 benchmarks shipped with this tool.</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>B</span> — batch size, the number of concurrent requests sharing one GPU step.</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>HBM_GBW</span> — GPU memory bandwidth in GB/s (HBM stands for High-Bandwidth Memory).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>weight_bytes</span> — model weights in bytes after quantization (e.g. Q4 halves FP16).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>KV_per_seq</span> — per-sequence KV cache size for the current context length.</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>layers</span> — number of transformer decoder layers in the model.</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>head_dim</span> — dimension of each attention head (hidden_size ÷ heads, unless the model overrides it).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>kv_heads</span> — number of K/V heads (GQA groups query heads to share fewer KV heads, MHA has one KV head per query head).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>kv_dtype_bytes</span> — bytes per KV element (FP16 = 2, FP8 = 1, INT4 ≈ 0.5).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>d_c</span> — MLA's compressed latent dimension (DeepSeek V2/V3: 512).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>d_h^R</span> — MLA's decoupled RoPE head dimension (DeepSeek V2/V3: 64).</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>k</span> — MTP draft tokens proposed per step.</div>
+                      <div><span style={{ color: 'var(--accent-info)' }}>α<sub>accept</sub></span> — fraction of MTP drafts the verifier accepts.</div>
+                    </div>
+                  </details>
                   <div>
                     <span style={{ color: 'var(--accent-info)' }}>Prefill TPS</span> = MFU × GPU_FP16_TFLOPS ÷ (2 × active_params)<br />
                     = {(mfu * 100).toFixed(0)}% × {gpuRec.gpu.fp16_tflops} TFLOPS ÷ (2 × {(model.active_params || model.params).toFixed(1)}B)<br />
                     = <span style={{ color: 'var(--accent-success)' }}>{gpuRec.throughput?.prefillTps.toFixed(0)} tok/s</span>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--accent-info)' }}>Decode TPS (aggregate)</span> = B × HBM_GBW ÷ (weight_bytes + B × KV_per_seq)<br />
-                    = {concurrent} × {gpuRec.gpu.hbm_gbps} GB/s ÷ ({formatBytes(gpuRec.throughput?.weightsBytes || 0)} + {concurrent} × {formatBytes(gpuRec.throughput?.kvPerSeqBytes || 0)})<br />
-                    = <span style={{ color: 'var(--accent-success)' }}>{gpuRec.throughput?.decodeTpsAggregate.toFixed(0)} tok/s</span> ({gpuRec.throughput?.decodeTpsPerStream.toFixed(0)} tok/s per stream)
+                    <span style={{ color: 'var(--accent-info)' }}>Decode TPS (aggregate)</span> = η × B × HBM_GBW ÷ (weight_bytes + B × KV_per_seq)<br />
+                    = {((gpuRec.throughput?.decodeEfficiency ?? 1) * 100).toFixed(0)}% × {concurrent} × {gpuRec.gpu.hbm_gbps} GB/s ÷ ({formatBytes(gpuRec.throughput?.weightsBytes || 0)} + {concurrent} × {formatBytes(gpuRec.throughput?.kvPerSeqBytes || 0)})<br />
+                    = <span style={{ color: 'var(--accent-success)' }}>{gpuRec.throughput?.decodeTpsAggregate.toFixed(0)} tok/s</span> ({gpuRec.throughput?.decodeTpsPerStream.toFixed(0)} tok/s per stream)<br />
+                    <span style={{ color: 'var(--text-muted)' }}>η = decode efficiency vs theoretical bandwidth (measured on vLLM v0.8.5; depends on GPU gen, quant, batch size)</span>
                   </div>
                   <div>
                     {model.arch === 'mla' ? (
                       <>
-                        <span style={{ color: 'var(--accent-info)' }}>KV per token (MLA)</span> = 2 × layers × kv_dim × kv_dtype_bytes<br />
-                        = 2 × {model.layers} × {model.kv_dim || 512} × {kvBytes}<br />
+                        <span style={{ color: 'var(--accent-info)' }}>KV per token (MLA)</span> = layers × (d_c + d_h^R) × kv_dtype_bytes<br />
+                        = {model.layers} × ({model.kv_dim || 512} + 64) × {kvBytes}<br />
+                      </>
+                    ) : model.arch === 'mqa_shared' ? (
+                      <>
+                        <span style={{ color: 'var(--accent-info)' }}>KV per token (V4 shared K=V MQA)</span> = layers × head_dim × kv_dtype_bytes<br />
+                        = {model.layers} × {model.head_dim || (model.hidden / model.heads).toFixed(0)} × {kvBytes}<br />
                       </>
                     ) : (
                       <>
                         <span style={{ color: 'var(--accent-info)' }}>KV per token ({model.arch.toUpperCase()})</span> = 2 × layers × kv_heads × head_dim × kv_dtype_bytes<br />
-                        = 2 × {model.layers} × {model.kv_heads || model.heads} × {(model.hidden / model.heads).toFixed(0)} × {kvBytes}<br />
+                        = 2 × {model.layers} × {model.kv_heads || model.heads} × {(model.head_dim || model.hidden / model.heads).toFixed(0)} × {kvBytes}<br />
                       </>
                     )}
                     = <span style={{ color: 'var(--accent-success)' }}>{formatSmallBytes(calculateKVPerToken(model, kvBytes))}/token</span>
+                  </div>
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '6px' }}>
+                    <span style={{ color: 'var(--accent-info)' }}>Decode TPS with MTP</span> = Decode TPS × α<sub>accept</sub> × k<br />
+                    <em>k</em> is how many draft tokens the model proposes per step (usually 2 to 4); <em>α<sub>accept</sub></em> is the fraction the verifier accepts (around 0.7 to 0.85 in production).<br />
+                    For this config with k=2 and α=0.8: <span style={{ color: 'var(--accent-success)' }}>{gpuRec.throughput?.decodeTpsAggregate.toFixed(0)} × 0.8 × 2 ≈ {Math.round((gpuRec.throughput?.decodeTpsAggregate || 0) * 1.6)} tok/s</span>, about 1.6× faster.<br />
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.95em' }}>
+                      Reported speedups as of May 2026: Gemma 4's MTP drafter hits up to 3× (Google AI), Qwen3.6 MTP lands at 1.7–2.4× on llama.cpp, DeepSeek V3/V4's native MTP heads do ~1.8× on SGLang at batch 1. MTP doesn't add weight reads; it hides decode latency behind verification. VRAM and prefill TPS are unchanged. To use this calculator's $/mo with MTP on, divide your required output-tok/s by the speedup factor before reading the GPU count.
+                    </span>
                   </div>
                   <div>
                     <span style={{ color: 'var(--accent-info)' }}>VRAM</span> = weights + KV_cache × concurrent + 15% overhead<br />
@@ -591,8 +960,8 @@ export default function App() {
         {/* Footer */}
         <footer className="mt-12 pt-6 text-center text-xs" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
           <p>
-            All prices in USD. GPU costs assume 730 hrs/mo — RunPod &amp; Lambda pricing, May 2026.
-            API pricing from OpenRouter as of May 2026.
+            All prices in USD. GPU costs assume 730 hrs/mo — sourced from RunPod, Lambda, Vast.ai, AWS &amp; GCP pricing pages, May 2026.
+            Recommended GPU picks the cheapest provider for the selected tier. API pricing from OpenRouter as of May 2026.
           </p>
           <p className="mt-2 flex items-center justify-center gap-4">
             <a href="https://www.rituraj.info/posts/on-prem-llm-deployment-cto/" target="_blank" rel="noopener noreferrer"
